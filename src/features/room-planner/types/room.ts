@@ -2,6 +2,7 @@ export type WallSide = 'left' | 'right' | 'top' | 'bottom';
 
 export interface WindowFeature {
   type: 'window';
+  id: number;
   wall: WallSide;
   offsetIn: number;
   lengthIn: number;
@@ -9,6 +10,7 @@ export interface WindowFeature {
 
 export interface WallSegmentFeature {
   type: 'wall-segment';
+  id: number;
   wall: WallSide;
   offsetIn: number;
   lengthIn: number;
@@ -16,9 +18,11 @@ export interface WallSegmentFeature {
 
 export interface DoorSwingFeature {
   type: 'door-swing';
+  id: number;
   wall: WallSide;
   offsetIn: number;
   swingIn: number;
+  hingeDirection: 'left' | 'right';
 }
 
 export type RoomFeature = WindowFeature | WallSegmentFeature | DoorSwingFeature;

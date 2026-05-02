@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { toInches } from '../../../utils/coordinates';
 
+export type RotationDeg = 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315;
+
+const ROTATION_STEPS: RotationDeg[] = [0, 45, 90, 135, 180, 225, 270, 315];
+
 export interface FurnitureItem {
   id: number;
   name: string;
@@ -9,11 +13,12 @@ export interface FurnitureItem {
   x: number;
   y: number;
   color: string;
+  rotation: RotationDeg;
 }
 
 const INITIAL_FURNITURE: FurnitureItem[] = [
-  { id: 1, name: 'Bed',  w: 54, h: 75, x: 10, y: 10, color: '#ffcccb' },
-  { id: 2, name: 'Desk', w: 48, h: 24, x: 70, y: 10, color: '#add8e6' },
+  { id: 1, name: 'Bed',  w: 54, h: 75, x: 10, y: 10, color: '#ffcccb', rotation: 0 },
+  { id: 2, name: 'Desk', w: 48, h: 24, x: 70, y: 10, color: '#add8e6', rotation: 0 },
 ];
 
 export function useFurniture() {
@@ -46,8 +51,28 @@ export function useFurniture() {
       x: 40,
       y: 40,
       color: '#eee',
+      rotation: 0,
     }]);
   }
 
-  return { furniture, move, resize, add };
+  function update(id: number, changes: Partial<Omit<FurnitureItem, 'id'>>) {
+    setFurniture(prev => prev.map(f => f.id === id ? { ...f, ...changes } : f));
+  }
+
+  function remove(id: number) {
+    setFurniture(prev => prev.filter(f => f.id !== id));
+  }
+
+  function rotate(id: number) {
+    setFurniture(prev =>
+      prev.map(f => {
+        if (f.id !== id) return f;
+        const idx = ROTATION_STEPS.indexOf(f.rotation);
+        const next = ROTATION_STEPS[(idx + 1) % ROTATION_STEPS.length];
+        return { ...f, rotation: next };
+      })
+    );
+  }
+
+  return { furniture, move, resize, add, update, remove, rotate };
 }

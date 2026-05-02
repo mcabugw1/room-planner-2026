@@ -2,71 +2,120 @@ import React from 'react';
 import { toPixels } from '../../../utils/coordinates';
 import type { RoomFeature, RoomLayout } from '../types/room';
 
-function renderFeature(feature: RoomFeature, index: number): React.ReactNode {
-  switch (feature.type) {
-    case 'window':
-      return (
-        <div
-          key={index}
-          title="Sliding Window"
-          style={{
-            position: 'absolute',
-            left: feature.wall === 'left' ? -5 : undefined,
-            right: feature.wall === 'right' ? -5 : undefined,
-            top: toPixels(feature.offsetIn),
-            height: toPixels(feature.lengthIn),
-            width: 10,
-            background: '#87CEEB',
-            border: '1px solid #555',
-          }}
-        />
-      );
+function renderFeature(
+  feature: RoomFeature,
+  selectedId: number | null,
+  onFeatureClick: (id: number) => void,
+): React.ReactNode {
+  const selected = feature.id === selectedId;
+  const clickHandler = (e: React.MouseEvent) => { e.stopPropagation(); onFeatureClick(feature.id); };
+  const selectionOutline = selected ? '2px solid #0066ff' : undefined;
 
-    case 'wall-segment': {
-      const vertical = feature.wall === 'left' || feature.wall === 'right';
+  switch (feature.type) {
+    case 'window': {
+      const horizontal = feature.wall === 'top' || feature.wall === 'bottom';
       return (
         <div
-          key={index}
+          key={feature.id}
+          title="Window"
+          onClick={clickHandler}
           style={{
             position: 'absolute',
-            right:   feature.wall === 'right'  ? -5 : undefined,
-            left:    feature.wall === 'left'   ? -5
-                   : feature.wall === 'bottom' ? toPixels(feature.offsetIn)
-                   : undefined,
-            top:    vertical ? toPixels(feature.offsetIn) : undefined,
+            left:   feature.wall === 'left'   ? -5
+                  : feature.wall === 'bottom' || feature.wall === 'top' ? toPixels(feature.offsetIn)
+                  : undefined,
+            right:  feature.wall === 'right'  ? -5 : undefined,
+            top:    feature.wall === 'top'    ? -5
+                  : feature.wall === 'left' || feature.wall === 'right' ? toPixels(feature.offsetIn)
+                  : undefined,
             bottom: feature.wall === 'bottom' ? -5 : undefined,
-            height: vertical ? toPixels(feature.lengthIn) : 5,
-            width:  vertical ? 5 : toPixels(feature.lengthIn),
-            background: '#333',
+            height: horizontal ? 10 : toPixels(feature.lengthIn),
+            width:  horizontal ? toPixels(feature.lengthIn) : 10,
+            background: '#87CEEB',
+            border: selectionOutline ?? '1px solid #555',
+            cursor: 'pointer',
           }}
         />
       );
     }
 
-    case 'door-swing':
+    case 'wall-segment': {
+      const horizontal = feature.wall === 'top' || feature.wall === 'bottom';
       return (
         <div
-          key={index}
+          key={feature.id}
+          onClick={clickHandler}
           style={{
             position: 'absolute',
-            right: feature.wall === 'right' ? 0 : undefined,
-            top: toPixels(feature.offsetIn),
-            height: toPixels(feature.swingIn),
-            width: toPixels(feature.swingIn),
-            border: '1px dashed #999',
-            borderRadius: '0 0 0 100%',
+            left:   feature.wall === 'left'   ? -5
+                  : feature.wall === 'bottom' || feature.wall === 'top' ? toPixels(feature.offsetIn)
+                  : undefined,
+            right:  feature.wall === 'right'  ? -5 : undefined,
+            top:    feature.wall === 'top'    ? -5
+                  : feature.wall === 'left' || feature.wall === 'right' ? toPixels(feature.offsetIn)
+                  : undefined,
+            bottom: feature.wall === 'bottom' ? -5 : undefined,
+            height: horizontal ? 5 : toPixels(feature.lengthIn),
+            width:  horizontal ? toPixels(feature.lengthIn) : 5,
+            background: '#333',
+            outline: selectionOutline,
+            cursor: 'pointer',
           }}
         />
       );
+    }
+
+    case 'door-swing': {
+      const sw = toPixels(feature.swingIn);
+
+      let posStyle: React.CSSProperties = {};
+      let borderRadius = '';
+
+      if (feature.wall === 'right') {
+        posStyle = { right: 0, top: toPixels(feature.offsetIn) };
+        borderRadius = feature.hingeDirection === 'left' ? '0 0 0 100%' : '100% 0 0 0';
+      } else if (feature.wall === 'left') {
+        posStyle = { left: 0, top: toPixels(feature.offsetIn) };
+        borderRadius = feature.hingeDirection === 'right' ? '0 0 100% 0' : '0 100% 0 0';
+      } else if (feature.wall === 'bottom') {
+        posStyle = { bottom: 0, left: toPixels(feature.offsetIn) };
+        borderRadius = feature.hingeDirection === 'left' ? '100% 0 0 0' : '0 100% 0 0';
+      } else {
+        posStyle = { top: 0, left: toPixels(feature.offsetIn) };
+        borderRadius = feature.hingeDirection === 'left' ? '0 0 0 100%' : '0 0 100% 0';
+      }
+
+      return (
+        <div
+          key={feature.id}
+          title="Door"
+          onClick={clickHandler}
+          style={{
+            position: 'absolute',
+            ...posStyle,
+            height: sw,
+            width: sw,
+            border: selectionOutline ?? '1px dashed #999',
+            borderRadius,
+            cursor: 'pointer',
+          }}
+        />
+      );
+    }
   }
 }
 
 interface Props {
   layout: RoomLayout;
+  features: RoomFeature[];
+  selectedFeatureId: number | null;
+  onFeatureClick: (id: number) => void;
+  snapGridIn?: number;
   children?: React.ReactNode;
 }
 
-export default function RoomCanvas({ layout, children }: Props) {
+export default function RoomCanvas({ layout, features, selectedFeatureId, onFeatureClick, snapGridIn, children }: Props) {
+  const gridPx = snapGridIn ? toPixels(snapGridIn) : null;
   return (
     <div
       style={{
@@ -76,9 +125,13 @@ export default function RoomCanvas({ layout, children }: Props) {
         position: 'relative',
         background: '#fff',
         boxShadow: '0 0 20px rgba(0,0,0,0.1)',
+        backgroundImage: gridPx
+          ? `linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)`
+          : undefined,
+        backgroundSize: gridPx ? `${gridPx}px ${gridPx}px` : undefined,
       }}
     >
-      {layout.features.map((f, i) => renderFeature(f, i))}
+      {features.map(f => renderFeature(f, selectedFeatureId, onFeatureClick))}
       {children}
     </div>
   );
