@@ -41,5 +41,10 @@ export function useWallFeatures(initialFeatures: RoomFeature[]) {
     setSelectedFeatureId(id);
   }
 
-  return { features, selectedFeatureId, add, remove, update, select };
+  function reset(items: RoomFeature[]) {
+    setFeatures(items);
+    setSelectedFeatureId(null);
+  }
+
+  return { features, selectedFeatureId, add, remove, update, select, reset };
 }

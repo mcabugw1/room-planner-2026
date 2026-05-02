@@ -78,5 +78,9 @@ export function useFurniture() {
     );
   }
 
-  return { furniture, move, resize, add, update, remove, rotate };
+  function reset(items: FurnitureItem[]) {
+    setFurniture(items);
+  }
+
+  return { furniture, move, resize, add, update, remove, rotate, reset };
 }

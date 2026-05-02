@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Rnd } from 'react-rnd';
 import { toPixels } from '../../../utils/coordinates';
 import { useFurniture } from '../hooks/useFurniture';
 import { useWallFeatures } from '../hooks/useWallFeatures';
+import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
 import RoomCanvas from './RoomCanvas';
+import LayoutsPanel from './LayoutsPanel';
 import { DEFAULT_ROOM } from '../data/room';
+import { findNearestNeighbors, measureTwoObjects } from '../utils/measurements';
+import type { MeasurementArrow } from '../utils/measurements';
+import type { LayoutSnapshot } from '../services/layoutDb';
 import type { RoomLayout, WallSide } from '../types/room';
 
 const PRESETS: { label: string; w: number; h: number }[] = [
@@ -20,6 +25,10 @@ const PRESETS: { label: string; w: number; h: number }[] = [
 
 const SNAP_SIZES = [6, 12, 24] as const;
 
+const WALL_LABELS: Record<WallSide, string> = {
+  top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left',
+};
+
 function SectionPanel({
   title,
   open,
@@ -32,78 +41,100 @@ function SectionPanel({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ border: '1px solid #ddd', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
+    <div className="section-panel">
       <div
         onClick={onToggle}
-        style={{
-          background: '#f5f5f5',
-          padding: '8px 12px',
-          fontWeight: 'bold',
-          fontSize: 13,
-          cursor: 'pointer',
-          display: 'flex',
-          justifyContent: 'space-between',
-          userSelect: 'none',
-        }}
+        className={`section-header${open ? ' open' : ''}`}
       >
-        {title}
-        <span style={{ color: '#888', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
+        <span>{title}</span>
+        <span className="section-chevron">{open ? '▾' : '›'}</span>
       </div>
-      {open && <div style={{ padding: 12, fontSize: 13 }}>{children}</div>}
+      {open && <div className="section-body">{children}</div>}
     </div>
   );
 }
 
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FieldRow({ label, children }: { label?: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 8 }}>
-      <label style={{ display: 'block', fontSize: 11, color: '#666', marginBottom: 3 }}>{label}</label>
+    <div className="field-row">
+      {label && <label className="field-label">{label}</label>}
       {children}
     </div>
   );
 }
 
-const inputStyle = {
-  width: '100%',
-  padding: '5px 8px',
-  border: '1px solid #ccc',
-  borderRadius: 4,
-  fontSize: 13,
-  boxSizing: 'border-box' as const,
-};
-
-const WALL_LABELS: Record<WallSide, string> = { top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left' };
-
 export default function RoomPlanner() {
-  const { furniture, move, resize, add, update, remove, rotate } = useFurniture();
+  const { furniture, move, resize, add, update, remove, rotate, reset: resetFurniture } = useFurniture();
   const wallFeatures = useWallFeatures(DEFAULT_ROOM.features);
 
-  const [layout, setLayout] = useState<RoomLayout>({ ...DEFAULT_ROOM, features: [] });
+  const [layout, setLayout]           = useState<RoomLayout>({ ...DEFAULT_ROOM, features: [] });
   const [selectedId, setSelectedId]   = useState<number | null>(null);
+
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [snapGridIn, setSnapGridIn]   = useState<typeof SNAP_SIZES[number]>(6);
 
+  const [layoutsOpen,  setLayoutsOpen]  = useState(true);
   const [dimOpen,      setDimOpen]      = useState(true);
   const [gridOpen,     setGridOpen]     = useState(false);
   const [propOpen,     setPropOpen]     = useState(true);
   const [wallFeatOpen, setWallFeatOpen] = useState(false);
+  const [measureOpen,  setMeasureOpen]  = useState(false);
   const [legendOpen,   setLegendOpen]   = useState(true);
 
-  // Wall feature form state
-  const [newFeatType,   setNewFeatType]   = useState<'window' | 'door-swing' | 'wall-segment'>('window');
-  const [newFeatWall,   setNewFeatWall]   = useState<WallSide>('bottom');
-  const [newFeatOffset, setNewFeatOffset] = useState(12);
-  const [newFeatLength, setNewFeatLength] = useState(36);
-  const [newFeatHinge,  setNewFeatHinge]  = useState<'left' | 'right'>('left');
+  const snapshot = useMemo<LayoutSnapshot>(() => ({
+    widthIn: layout.widthIn,
+    heightIn: layout.heightIn,
+    features: wallFeatures.features,
+    furniture,
+  }), [layout.widthIn, layout.heightIn, wallFeatures.features, furniture]);
+
+  const restore = useCallback((s: LayoutSnapshot) => {
+    setLayout(prev => ({ ...prev, widthIn: s.widthIn, heightIn: s.heightIn }));
+    wallFeatures.reset(s.features);
+    resetFurniture(s.furniture);
+    setSelectedId(null);
+  }, [wallFeatures, resetFurniture]);
+
+  const persistence = useLayoutPersistence(snapshot, restore);
+
+  const [showNeighbors, setShowNeighbors] = useState(false);
+  const [showPair,      setShowPair]      = useState(false);
+  const [pairIds,       setPairIds]       = useState<[number | null, number | null]>([null, null]);
+
+  const [newFeatType,     setNewFeatType]     = useState<'window' | 'door-swing' | 'wall-segment'>('window');
+  const [newFeatWall,     setNewFeatWall]     = useState<WallSide>('bottom');
+  const [newFeatOffset,   setNewFeatOffset]   = useState(12);
+  const [newFeatLength,   setNewFeatLength]   = useState(36);
+  const [newFeatHinge,    setNewFeatHinge]    = useState<'left' | 'right'>('left');
   const [newFeatSwingDir, setNewFeatSwingDir] = useState<'in' | 'out'>('in');
 
   const selectedItem    = furniture.find(f => f.id === selectedId) ?? null;
   const selectedFeature = wallFeatures.features.find(f => f.id === wallFeatures.selectedFeatureId) ?? null;
-  const snapPx = toPixels(snapGridIn);
+  const snapPx   = toPixels(snapGridIn);
   const widthFt  = Math.round(layout.widthIn  / 12);
   const heightFt = Math.round(layout.heightIn / 12);
 
+  const measurementArrows = useMemo<MeasurementArrow[]>(() => {
+    const arrows: MeasurementArrow[] = [];
+    if (showNeighbors) {
+      arrows.push(...findNearestNeighbors(furniture, layout));
+    }
+    if (showPair && pairIds[0] !== null && pairIds[1] !== null) {
+      const a = furniture.find(f => f.id === pairIds[0]);
+      const b = furniture.find(f => f.id === pairIds[1]);
+      if (a && b) arrows.push(measureTwoObjects(a, b));
+    }
+    return arrows;
+  }, [showNeighbors, showPair, pairIds, furniture, layout]);
+
   function selectFurniture(id: number) {
+    if (showPair) {
+      setPairIds(prev => {
+        if (prev[0] === null) return [id, null];
+        return [prev[0], id];
+      });
+      return;
+    }
     setSelectedId(id);
     wallFeatures.select(null);
   }
@@ -161,18 +192,378 @@ export default function RoomPlanner() {
 
   function featureLabel(f: typeof wallFeatures.features[number]) {
     const wall = WALL_LABELS[f.wall];
-    if (f.type === 'window') return `Window — ${wall} +${f.offsetIn}"`;
-    if (f.type === 'door-swing') return `Door — ${wall} +${f.offsetIn}"`;
+    if (f.type === 'window')       return `Window — ${wall} +${f.offsetIn}"`;
+    if (f.type === 'door-swing')   return `Door — ${wall} +${f.offsetIn}"`;
     return `Wall — ${wall} +${f.offsetIn}"`;
   }
 
   return (
-    <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
-      <div>
-        <p style={{ margin: '0 0 8px', fontSize: 13, color: '#555' }}>
-          {widthFt}' × {heightFt}' &nbsp;·&nbsp; Scale: 1" = 4px
-          {snapEnabled && <span style={{ marginLeft: 8, color: '#0066ff' }}>⊞ {snapGridIn}" snap</span>}
+    <div className="planner">
+
+      {/* ── Left sidebar ── */}
+      <aside className="sidebar">
+
+        {/* Layouts */}
+        <SectionPanel title="Layouts" open={layoutsOpen} onToggle={() => setLayoutsOpen(o => !o)}>
+          <LayoutsPanel
+            savedLayouts={persistence.savedLayouts}
+            onSave={name => persistence.saveNamed(name)}
+            onLoad={async id => {
+              const s = await persistence.loadNamed(id);
+              if (s) restore(s);
+            }}
+            onRename={(id, name) => persistence.renameSaved(id, name)}
+            onDelete={id => persistence.deleteSaved(id)}
+          />
+        </SectionPanel>
+
+        {/* Room */}
+        <SectionPanel title="Room" open={dimOpen} onToggle={() => setDimOpen(o => !o)}>
+          <FieldRow label="Preset">
+            <select
+              className="input"
+              onChange={e => applyPreset(Number(e.target.value))}
+              value={PRESETS.findIndex(p => p.w === layout.widthIn && p.h === layout.heightIn)}
+            >
+              {PRESETS.map((p, i) => (
+                <option key={i} value={i}>{p.label}</option>
+              ))}
+            </select>
+          </FieldRow>
+          <div className="dim-pair">
+            <FieldRow label="Width (ft)">
+              <input
+                type="number"
+                className="input"
+                min={4} max={60}
+                value={widthFt}
+                onChange={e => setWidthFt(Number(e.target.value))}
+              />
+            </FieldRow>
+            <FieldRow label="Depth (ft)">
+              <input
+                type="number"
+                className="input"
+                min={4} max={60}
+                value={heightFt}
+                onChange={e => setHeightFt(Number(e.target.value))}
+              />
+            </FieldRow>
+          </div>
+        </SectionPanel>
+
+        {/* Grid & Snap */}
+        <SectionPanel title="Grid" open={gridOpen} onToggle={() => setGridOpen(o => !o)}>
+          <FieldRow>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={snapEnabled}
+                onChange={e => setSnapEnabled(e.target.checked)}
+              />
+              Snap to grid
+            </label>
+          </FieldRow>
+          {snapEnabled && (
+            <FieldRow label="Grid size">
+              <div className="btn-toggle-group">
+                {SNAP_SIZES.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setSnapGridIn(s)}
+                    className={`btn-toggle${snapGridIn === s ? ' btn-toggle--active' : ''}`}
+                  >
+                    {s}"
+                  </button>
+                ))}
+              </div>
+            </FieldRow>
+          )}
+        </SectionPanel>
+
+        {/* Furniture */}
+        <SectionPanel title="Furniture" open={propOpen} onToggle={() => setPropOpen(o => !o)}>
+          <button className="btn-primary" onClick={() => add()}>
+            + Add Furniture
+          </button>
+
+          {selectedItem ? (
+            <div>
+              <div className="selected-label">Selected item</div>
+              <FieldRow label="Name">
+                <input
+                  type="text"
+                  className="input"
+                  value={selectedItem.name}
+                  onChange={e => update(selectedItem.id, { name: e.target.value })}
+                />
+              </FieldRow>
+              <div className="dim-pair">
+                <FieldRow label="Width (in)">
+                  <input
+                    type="number"
+                    className="input"
+                    min={6} max={layout.widthIn}
+                    value={Math.round(selectedItem.w)}
+                    onChange={e => update(selectedItem.id, { w: Number(e.target.value) })}
+                  />
+                </FieldRow>
+                <FieldRow label="Depth (in)">
+                  <input
+                    type="number"
+                    className="input"
+                    min={6} max={layout.heightIn}
+                    value={Math.round(selectedItem.h)}
+                    onChange={e => update(selectedItem.id, { h: Number(e.target.value) })}
+                  />
+                </FieldRow>
+              </div>
+              <FieldRow label="Color">
+                <input
+                  type="color"
+                  className="input"
+                  value={selectedItem.color}
+                  onChange={e => update(selectedItem.id, { color: e.target.value })}
+                />
+              </FieldRow>
+              <FieldRow label="Rotation">
+                <div className="rotation-display">
+                  {selectedItem.rotation}°
+                  <span className="rotation-hint">(R to rotate)</span>
+                </div>
+              </FieldRow>
+              <button
+                className="btn-destructive"
+                onClick={() => { remove(selectedItem.id); setSelectedId(null); }}
+              >
+                Delete
+              </button>
+            </div>
+          ) : (
+            <div className="empty-state">Click furniture to select</div>
+          )}
+        </SectionPanel>
+
+        {/* Wall Features */}
+        <SectionPanel title="Walls" open={wallFeatOpen} onToggle={() => setWallFeatOpen(o => !o)}>
+          <FieldRow label="Type">
+            <select
+              className="input"
+              value={newFeatType}
+              onChange={e => setNewFeatType(e.target.value as 'window' | 'door-swing' | 'wall-segment')}
+            >
+              <option value="window">Window</option>
+              <option value="door-swing">Door</option>
+              <option value="wall-segment">Wall segment</option>
+            </select>
+          </FieldRow>
+          <FieldRow label="Wall">
+            <select
+              className="input"
+              value={newFeatWall}
+              onChange={e => setNewFeatWall(e.target.value as WallSide)}
+            >
+              {(['top', 'right', 'bottom', 'left'] as WallSide[]).map(w => (
+                <option key={w} value={w}>{WALL_LABELS[w]}</option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow label="Offset from corner (in)">
+            <input
+              type="number"
+              className="input"
+              min={0}
+              value={newFeatOffset}
+              onChange={e => setNewFeatOffset(Number(e.target.value))}
+            />
+          </FieldRow>
+          <FieldRow label={newFeatType === 'door-swing' ? 'Swing radius (in)' : 'Width (in)'}>
+            <input
+              type="number"
+              className="input"
+              min={6}
+              value={newFeatLength}
+              onChange={e => setNewFeatLength(Number(e.target.value))}
+            />
+          </FieldRow>
+          {newFeatType === 'door-swing' && (
+            <>
+              <FieldRow label="Hinge side">
+                <div className="btn-toggle-group">
+                  {(['left', 'right'] as const).map(side => (
+                    <button
+                      key={side}
+                      onClick={() => setNewFeatHinge(side)}
+                      className={`btn-toggle${newFeatHinge === side ? ' btn-toggle--active' : ''}`}
+                    >
+                      {side.charAt(0).toUpperCase() + side.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </FieldRow>
+              <FieldRow label="Swing direction">
+                <div className="btn-toggle-group">
+                  {(['in', 'out'] as const).map(dir => (
+                    <button
+                      key={dir}
+                      onClick={() => setNewFeatSwingDir(dir)}
+                      className={`btn-toggle${newFeatSwingDir === dir ? ' btn-toggle--active' : ''}`}
+                    >
+                      {dir === 'in' ? 'Into room' : 'Out of room'}
+                    </button>
+                  ))}
+                </div>
+              </FieldRow>
+            </>
+          )}
+          <button className="btn-primary" onClick={addWallFeature}>
+            + Add Feature
+          </button>
+
+          {wallFeatures.features.length > 0 && (
+            <div>
+              <div className="feature-list-label">Placed features</div>
+              {wallFeatures.features.map(f => (
+                <div
+                  key={f.id}
+                  onClick={() => selectFeature(f.id)}
+                  className={`feature-item${f.id === wallFeatures.selectedFeatureId ? ' feature-item--selected' : ''}`}
+                >
+                  <span>{featureLabel(f)}</span>
+                  <button
+                    className="feature-remove"
+                    onClick={e => { e.stopPropagation(); wallFeatures.remove(f.id); }}
+                    aria-label="Remove feature"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              {selectedFeature && (
+                <div className="feature-editor">
+                  <span className="feature-editor-label">
+                    {selectedFeature.type === 'window' ? 'Window' : selectedFeature.type === 'wall-segment' ? 'Wall segment' : 'Door'}
+                  </span>
+                  <FieldRow label="Offset from corner (in)">
+                    <input
+                      type="number"
+                      className="input"
+                      min={0}
+                      value={Math.round(selectedFeature.offsetIn)}
+                      onChange={e => wallFeatures.update(selectedFeature.id, { offsetIn: Number(e.target.value) })}
+                    />
+                  </FieldRow>
+                  {(selectedFeature.type === 'window' || selectedFeature.type === 'wall-segment') && (
+                    <FieldRow label="Width (in)">
+                      <input
+                        type="number"
+                        className="input"
+                        min={6}
+                        value={Math.round(selectedFeature.lengthIn)}
+                        onChange={e => wallFeatures.update(selectedFeature.id, { lengthIn: Number(e.target.value) })}
+                      />
+                    </FieldRow>
+                  )}
+                  {selectedFeature.type === 'door-swing' && (
+                    <>
+                      <FieldRow label="Hinge side">
+                        <div className="btn-toggle-group">
+                          {(['left', 'right'] as const).map(side => (
+                            <button
+                              key={side}
+                              onClick={() => wallFeatures.update(selectedFeature.id, { hingeDirection: side })}
+                              className={`btn-toggle${selectedFeature.hingeDirection === side ? ' btn-toggle--active' : ''}`}
+                            >
+                              {side.charAt(0).toUpperCase() + side.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </FieldRow>
+                      <FieldRow label="Swing direction">
+                        <div className="btn-toggle-group">
+                          {(['in', 'out'] as const).map(dir => (
+                            <button
+                              key={dir}
+                              onClick={() => wallFeatures.update(selectedFeature.id, { swingDirection: dir })}
+                              className={`btn-toggle${selectedFeature.swingDirection === dir ? ' btn-toggle--active' : ''}`}
+                            >
+                              {dir === 'in' ? 'Into room' : 'Out of room'}
+                            </button>
+                          ))}
+                        </div>
+                      </FieldRow>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </SectionPanel>
+
+        {/* Measurements */}
+        <SectionPanel title="Measurements" open={measureOpen} onToggle={() => setMeasureOpen(o => !o)}>
+          <FieldRow label="Mode">
+            <div className="btn-toggle-group">
+              <button
+                className={`btn-toggle${showNeighbors ? ' btn-toggle--active' : ''}`}
+                onClick={() => setShowNeighbors(o => !o)}
+              >
+                All gaps
+              </button>
+              <button
+                className={`btn-toggle${showPair ? ' btn-toggle--active' : ''}`}
+                onClick={() => {
+                  setShowPair(o => !o);
+                  setPairIds([null, null]);
+                }}
+              >
+                Pair
+              </button>
+            </div>
+          </FieldRow>
+          {showPair && (
+            <div className="empty-state">
+              {pairIds[0] === null
+                ? 'Click first object'
+                : pairIds[1] === null
+                ? 'Click second object'
+                : 'Click any object to re-measure'}
+            </div>
+          )}
+        </SectionPanel>
+
+        {/* Controls legend */}
+        <SectionPanel title="Controls" open={legendOpen} onToggle={() => setLegendOpen(o => !o)}>
+          <table className="controls-table">
+            <tbody>
+              {[
+                ['Click',          'Select item'],
+                ['Drag',           'Move furniture or wall feature'],
+                ['Resize handles', 'Resize furniture or wall feature'],
+                ['R',              'Rotate selected furniture'],
+                ['Delete / ⌫',    'Remove selected item'],
+              ].map(([key, desc]) => (
+                <tr key={key}>
+                  <td className="controls-key">{key}</td>
+                  <td className="controls-desc">{desc}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionPanel>
+
+      </aside>
+
+      {/* ── Canvas area ── */}
+      <main className="canvas-area">
+        <p className="canvas-meta">
+          {widthFt}' × {heightFt}' · Scale: 1" = 4 px
+          {snapEnabled && (
+            <span className="canvas-snap-badge">⊞ {snapGridIn}" snap</span>
+          )}
         </p>
+
         <RoomCanvas
           layout={layout}
           features={wallFeatures.features}
@@ -180,12 +571,14 @@ export default function RoomPlanner() {
           onFeatureClick={selectFeature}
           onFeatureUpdate={wallFeatures.update}
           snapGridIn={snapEnabled ? snapGridIn : undefined}
+          measurementArrows={measurementArrows}
         >
-          {furniture.map((f) => {
-            const isOdd = f.rotation === 90 || f.rotation === 270;
+          {furniture.map(f => {
+            const isOdd      = f.rotation === 90 || f.rotation === 270;
             const isSnappable = snapEnabled && f.rotation % 90 === 0;
             const rndW = toPixels(isOdd ? f.h : f.w);
             const rndH = toPixels(isOdd ? f.w : f.h);
+            const isSelected = selectedId === f.id;
             return (
               <Rnd
                 key={f.id}
@@ -200,7 +593,9 @@ export default function RoomPlanner() {
                   resize(f.id, ref.style.width, ref.style.height, pos.x, pos.y)
                 }
                 style={{
-                  border: selectedId === f.id ? '2px solid #0066ff' : '1px solid #000',
+                  border: isSelected
+                    ? '2px solid var(--accent)'
+                    : '1px solid var(--border-strong)',
                   cursor: 'grab',
                   overflow: 'visible',
                 }}
@@ -217,8 +612,10 @@ export default function RoomPlanner() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 12,
-                    fontWeight: 'bold',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    fontFamily: 'var(--font)',
+                    color: 'var(--text-primary)',
                     pointerEvents: 'none',
                   }}
                 >
@@ -230,411 +627,8 @@ export default function RoomPlanner() {
             );
           })}
         </RoomCanvas>
-      </div>
+      </main>
 
-      <div style={{ width: 220, flexShrink: 0 }}>
-
-        {/* Room Dimensions */}
-        <SectionPanel title="Room Dimensions" open={dimOpen} onToggle={() => setDimOpen(o => !o)}>
-          <FieldRow label="Preset">
-            <select
-              style={inputStyle}
-              onChange={e => applyPreset(Number(e.target.value))}
-              value={PRESETS.findIndex(p => p.w === layout.widthIn && p.h === layout.heightIn)}
-            >
-              {PRESETS.map((p, i) => (
-                <option key={i} value={i}>{p.label}</option>
-              ))}
-            </select>
-          </FieldRow>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <FieldRow label="Width (ft)">
-              <input
-                type="number"
-                style={{ ...inputStyle, width: 80 }}
-                min={4} max={60}
-                value={widthFt}
-                onChange={e => setWidthFt(Number(e.target.value))}
-              />
-            </FieldRow>
-            <FieldRow label="Depth (ft)">
-              <input
-                type="number"
-                style={{ ...inputStyle, width: 80 }}
-                min={4} max={60}
-                value={heightFt}
-                onChange={e => setHeightFt(Number(e.target.value))}
-              />
-            </FieldRow>
-          </div>
-        </SectionPanel>
-
-        {/* Grid & Snap */}
-        <SectionPanel title="Grid & Snap" open={gridOpen} onToggle={() => setGridOpen(o => !o)}>
-          <FieldRow label="">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={snapEnabled}
-                onChange={e => setSnapEnabled(e.target.checked)}
-              />
-              Snap to grid
-            </label>
-          </FieldRow>
-          {snapEnabled && (
-            <FieldRow label="Grid size">
-              <div style={{ display: 'flex', gap: 6 }}>
-                {SNAP_SIZES.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setSnapGridIn(s)}
-                    style={{
-                      padding: '4px 10px',
-                      border: '1px solid #ccc',
-                      borderRadius: 4,
-                      background: snapGridIn === s ? '#0066ff' : '#fff',
-                      color: snapGridIn === s ? '#fff' : '#333',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                    }}
-                  >
-                    {s}"
-                  </button>
-                ))}
-              </div>
-            </FieldRow>
-          )}
-        </SectionPanel>
-
-        {/* Furniture */}
-        <SectionPanel title="Furniture" open={propOpen} onToggle={() => setPropOpen(o => !o)}>
-          <button
-            onClick={() => { add(); }}
-            style={{
-              width: '100%',
-              padding: '8px 0',
-              marginBottom: 12,
-              background: '#333',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 4,
-              cursor: 'pointer',
-              fontSize: 13,
-            }}
-          >
-            + Add Furniture
-          </button>
-
-          {selectedItem ? (
-            <div>
-              <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>Selected item</div>
-              <FieldRow label="Name">
-                <input
-                  type="text"
-                  style={inputStyle}
-                  value={selectedItem.name}
-                  onChange={e => update(selectedItem.id, { name: e.target.value })}
-                />
-              </FieldRow>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <FieldRow label="Width (in)">
-                  <input
-                    type="number"
-                    style={{ ...inputStyle, width: 80 }}
-                    min={6} max={layout.widthIn}
-                    value={Math.round(selectedItem.w)}
-                    onChange={e => update(selectedItem.id, { w: Number(e.target.value) })}
-                  />
-                </FieldRow>
-                <FieldRow label="Depth (in)">
-                  <input
-                    type="number"
-                    style={{ ...inputStyle, width: 80 }}
-                    min={6} max={layout.heightIn}
-                    value={Math.round(selectedItem.h)}
-                    onChange={e => update(selectedItem.id, { h: Number(e.target.value) })}
-                  />
-                </FieldRow>
-              </div>
-              <FieldRow label="Color">
-                <input
-                  type="color"
-                  style={{ ...inputStyle, height: 32, padding: 2, cursor: 'pointer' }}
-                  value={selectedItem.color}
-                  onChange={e => update(selectedItem.id, { color: e.target.value })}
-                />
-              </FieldRow>
-              <FieldRow label="Rotation">
-                <div style={{ fontSize: 13, padding: '4px 0', color: '#333' }}>
-                  {selectedItem.rotation}° &nbsp;
-                  <span style={{ fontSize: 11, color: '#999' }}>(press R to rotate)</span>
-                </div>
-              </FieldRow>
-              <button
-                onClick={() => { remove(selectedItem.id); setSelectedId(null); }}
-                style={{
-                  width: '100%',
-                  padding: '6px 0',
-                  marginTop: 4,
-                  background: '#dc2626',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '8px 0' }}>
-              Click furniture to select
-            </div>
-          )}
-        </SectionPanel>
-
-        {/* Wall Features */}
-        <SectionPanel title="Wall Features" open={wallFeatOpen} onToggle={() => setWallFeatOpen(o => !o)}>
-          <FieldRow label="Type">
-            <select
-              style={inputStyle}
-              value={newFeatType}
-              onChange={e => setNewFeatType(e.target.value as 'window' | 'door-swing' | 'wall-segment')}
-            >
-              <option value="window">Window</option>
-              <option value="door-swing">Door</option>
-              <option value="wall-segment">Wall</option>
-            </select>
-          </FieldRow>
-          <FieldRow label="Wall">
-            <select
-              style={inputStyle}
-              value={newFeatWall}
-              onChange={e => setNewFeatWall(e.target.value as WallSide)}
-            >
-              {(['top', 'right', 'bottom', 'left'] as WallSide[]).map(w => (
-                <option key={w} value={w}>{WALL_LABELS[w]}</option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Offset from corner (in)">
-            <input
-              type="number"
-              style={inputStyle}
-              min={0}
-              value={newFeatOffset}
-              onChange={e => setNewFeatOffset(Number(e.target.value))}
-            />
-          </FieldRow>
-          <FieldRow label={newFeatType === 'door-swing' ? 'Swing radius (in)' : 'Width (in)'}>
-            <input
-              type="number"
-              style={inputStyle}
-              min={6}
-              value={newFeatLength}
-              onChange={e => setNewFeatLength(Number(e.target.value))}
-            />
-          </FieldRow>
-          {newFeatType === 'door-swing' && (
-            <>
-              <FieldRow label="Hinge side">
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {(['left', 'right'] as const).map(side => (
-                    <button
-                      key={side}
-                      onClick={() => setNewFeatHinge(side)}
-                      style={{
-                        flex: 1,
-                        padding: '4px 0',
-                        border: '1px solid #ccc',
-                        borderRadius: 4,
-                        background: newFeatHinge === side ? '#0066ff' : '#fff',
-                        color: newFeatHinge === side ? '#fff' : '#333',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                      }}
-                    >
-                      {side.charAt(0).toUpperCase() + side.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </FieldRow>
-              <FieldRow label="Swing direction">
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {(['in', 'out'] as const).map(dir => (
-                    <button
-                      key={dir}
-                      onClick={() => setNewFeatSwingDir(dir)}
-                      style={{
-                        flex: 1,
-                        padding: '4px 0',
-                        border: '1px solid #ccc',
-                        borderRadius: 4,
-                        background: newFeatSwingDir === dir ? '#0066ff' : '#fff',
-                        color: newFeatSwingDir === dir ? '#fff' : '#333',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                      }}
-                    >
-                      {dir === 'in' ? 'Into room' : 'Out of room'}
-                    </button>
-                  ))}
-                </div>
-              </FieldRow>
-            </>
-          )}
-          <button
-            onClick={addWallFeature}
-            style={{
-              width: '100%',
-              padding: '7px 0',
-              marginTop: 4,
-              marginBottom: 12,
-              background: '#333',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 4,
-              cursor: 'pointer',
-              fontSize: 13,
-            }}
-          >
-            + Add Feature
-          </button>
-
-          {wallFeatures.features.length > 0 && (
-            <div>
-              <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>Placed features</div>
-              {wallFeatures.features.map(f => (
-                <div
-                  key={f.id}
-                  onClick={() => selectFeature(f.id)}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '4px 6px',
-                    marginBottom: 4,
-                    borderRadius: 4,
-                    background: f.id === wallFeatures.selectedFeatureId ? '#e8f0fe' : '#f9f9f9',
-                    border: f.id === wallFeatures.selectedFeatureId ? '1px solid #0066ff' : '1px solid #eee',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                  }}
-                >
-                  <span>{featureLabel(f)}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); wallFeatures.remove(f.id); }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#dc2626',
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      padding: '0 2px',
-                      lineHeight: 1,
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {selectedFeature && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee' }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>
-                    Selected {selectedFeature.type === 'window' ? 'window' : selectedFeature.type === 'wall-segment' ? 'wall segment' : 'door'}
-                  </div>
-                  <FieldRow label="Offset from corner (in)">
-                    <input
-                      type="number"
-                      style={inputStyle}
-                      min={0}
-                      value={Math.round(selectedFeature.offsetIn)}
-                      onChange={e => wallFeatures.update(selectedFeature.id, { offsetIn: Number(e.target.value) })}
-                    />
-                  </FieldRow>
-                  {(selectedFeature.type === 'window' || selectedFeature.type === 'wall-segment') && (
-                    <FieldRow label="Width (in)">
-                      <input
-                        type="number"
-                        style={inputStyle}
-                        min={6}
-                        value={Math.round(selectedFeature.lengthIn)}
-                        onChange={e => wallFeatures.update(selectedFeature.id, { lengthIn: Number(e.target.value) })}
-                      />
-                    </FieldRow>
-                  )}
-                  {selectedFeature.type === 'door-swing' && (
-                    <>
-                      <FieldRow label="Hinge side">
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {(['left', 'right'] as const).map(side => (
-                            <button
-                              key={side}
-                              onClick={() => wallFeatures.update(selectedFeature.id, { hingeDirection: side })}
-                              style={{
-                                flex: 1, padding: '4px 0',
-                                border: '1px solid #ccc', borderRadius: 4,
-                                background: selectedFeature.hingeDirection === side ? '#0066ff' : '#fff',
-                                color: selectedFeature.hingeDirection === side ? '#fff' : '#333',
-                                cursor: 'pointer', fontSize: 12,
-                              }}
-                            >
-                              {side.charAt(0).toUpperCase() + side.slice(1)}
-                            </button>
-                          ))}
-                        </div>
-                      </FieldRow>
-                      <FieldRow label="Swing direction">
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {(['in', 'out'] as const).map(dir => (
-                            <button
-                              key={dir}
-                              onClick={() => wallFeatures.update(selectedFeature.id, { swingDirection: dir })}
-                              style={{
-                                flex: 1, padding: '4px 0',
-                                border: '1px solid #ccc', borderRadius: 4,
-                                background: selectedFeature.swingDirection === dir ? '#0066ff' : '#fff',
-                                color: selectedFeature.swingDirection === dir ? '#fff' : '#333',
-                                cursor: 'pointer', fontSize: 12,
-                              }}
-                            >
-                              {dir === 'in' ? 'Into room' : 'Out of room'}
-                            </button>
-                          ))}
-                        </div>
-                      </FieldRow>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </SectionPanel>
-
-        {/* Controls Legend */}
-        <SectionPanel title="Controls" open={legendOpen} onToggle={() => setLegendOpen(o => !o)}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <tbody>
-              {[
-                ['Click',           'Select item'],
-                ['Drag',            'Move furniture or wall feature'],
-                ['Resize handles',  'Resize furniture or wall feature'],
-                ['R',               'Rotate selected furniture'],
-                ['Delete / ⌫',      'Remove selected item'],
-              ].map(([key, desc]) => (
-                <tr key={key} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '4px 6px 4px 0', fontFamily: 'monospace', color: '#0066ff', whiteSpace: 'nowrap' }}>
-                    {key}
-                  </td>
-                  <td style={{ padding: '4px 0', color: '#555' }}>{desc}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </SectionPanel>
-
-      </div>
     </div>
   );
 }
