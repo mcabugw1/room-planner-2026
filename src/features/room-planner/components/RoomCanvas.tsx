@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { toPixels, toInches } from '../../../utils/coordinates';
 import type { RoomFeature, RoomLayout, WallSide } from '../types/room';
 import type { FeatureChanges } from '../hooks/useWallFeatures';
+import type { MeasurementArrow } from '../utils/measurements';
+import MeasurementOverlay from './MeasurementOverlay';
 
 const SNAP_IN = 15 / 4;
 const MIN_LEN_IN = 6;
@@ -70,11 +72,12 @@ interface Props {
   onFeatureClick: (id: number) => void;
   onFeatureUpdate: (id: number, changes: FeatureChanges) => void;
   snapGridIn?: number;
+  measurementArrows?: MeasurementArrow[];
   children?: React.ReactNode;
 }
 
 export default function RoomCanvas({
-  layout, features, selectedFeatureId, onFeatureClick, onFeatureUpdate, snapGridIn, children,
+  layout, features, selectedFeatureId, onFeatureClick, onFeatureUpdate, snapGridIn, measurementArrows, children,
 }: Props) {
   const gridPx = snapGridIn ? toPixels(snapGridIn) : null;
   const [liveState, setLiveState] = useState<LiveState>(null);
@@ -141,7 +144,7 @@ export default function RoomCanvas({
     return {
       position: 'absolute',
       width: 8, height: 8,
-      background: '#0066ff', borderRadius: 2, zIndex: 10,
+      background: 'var(--accent)', borderRadius: 2, zIndex: 10,
       cursor: horizontal ? 'ew-resize' : 'ns-resize',
       ...(horizontal
         ? { [end === 'start' ? 'left' : 'right']: -4, top: perp }
@@ -154,11 +157,11 @@ export default function RoomCanvas({
       style={{
         width: toPixels(layout.widthIn),
         height: toPixels(layout.heightIn),
-        border: '5px solid #333',
+        border: '5px solid var(--text-primary)',
         position: 'relative',
-        background: '#fff',
+        background: 'var(--bg-canvas)',
         overflow: 'visible',
-        boxShadow: '0 0 20px rgba(0,0,0,0.1)',
+        boxShadow: '0 2px 20px rgba(0,0,0,0.07)',
         backgroundImage: gridPx
           ? `linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)`
           : undefined,
@@ -191,7 +194,7 @@ export default function RoomCanvas({
                 height: horiz ? 10 : lenPx,
                 width: horiz ? lenPx : 10,
                 background: '#87CEEB',
-                border: selected ? '2px solid #0066ff' : '1px solid #555',
+                border: selected ? '2px solid var(--accent)' : '1px solid var(--border-strong)',
                 cursor: 'grab',
               }}
             >
@@ -220,8 +223,8 @@ export default function RoomCanvas({
                 bottom: feature.wall === 'bottom' ? -5 : undefined,
                 height: horiz ? 5 : lenPx,
                 width: horiz ? lenPx : 5,
-                background: '#333',
-                outline: selected ? '2px solid #0066ff' : undefined,
+                background: 'var(--text-primary)',
+                outline: selected ? '2px solid var(--accent)' : 'none',
                 cursor: 'grab',
               }}
             >
@@ -279,7 +282,7 @@ export default function RoomCanvas({
                 position: 'absolute',
                 ...posStyle,
                 height: sw, width: sw,
-                border: selected ? '2px solid #0066ff' : '1px dashed #999',
+                border: selected ? '2px solid var(--accent)' : '1px dashed var(--text-tertiary)',
                 borderRadius,
                 cursor: 'grab',
               }}
@@ -290,6 +293,13 @@ export default function RoomCanvas({
         return null;
       })}
       {children}
+      {measurementArrows && measurementArrows.length > 0 && (
+        <MeasurementOverlay
+          arrows={measurementArrows}
+          widthPx={toPixels(layout.widthIn)}
+          heightPx={toPixels(layout.heightIn)}
+        />
+      )}
     </div>
   );
 }
