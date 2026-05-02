@@ -3,7 +3,7 @@ import type { RoomFeature, WallSide } from '../types/room';
 
 export type AddableFeature =
   | { type: 'window';       wall: WallSide; offsetIn: number; lengthIn: number }
-  | { type: 'door-swing';   wall: WallSide; offsetIn: number; swingIn: number; hingeDirection: 'left' | 'right' }
+  | { type: 'door-swing';   wall: WallSide; offsetIn: number; swingIn: number; hingeDirection: 'left' | 'right'; swingDirection: 'in' | 'out' }
   | { type: 'wall-segment'; wall: WallSide; offsetIn: number; lengthIn: number };
 
 export type FeatureChanges = {
@@ -12,6 +12,7 @@ export type FeatureChanges = {
   lengthIn?: number;
   swingIn?: number;
   hingeDirection?: 'left' | 'right';
+  swingDirection?: 'in' | 'out';
 };
 
 export function useWallFeatures(initialFeatures: RoomFeature[]) {

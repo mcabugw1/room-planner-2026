@@ -23,6 +23,7 @@ export interface DoorSwingFeature {
   offsetIn: number;
   swingIn: number;
   hingeDirection: 'left' | 'right';
+  swingDirection: 'in' | 'out';
 }
 
 export type RoomFeature = WindowFeature | WallSegmentFeature | DoorSwingFeature;

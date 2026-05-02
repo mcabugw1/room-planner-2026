@@ -90,11 +90,12 @@ export default function RoomPlanner() {
   const [legendOpen,   setLegendOpen]   = useState(true);
 
   // Wall feature form state
-  const [newFeatType,   setNewFeatType]   = useState<'window' | 'door-swing'>('window');
+  const [newFeatType,   setNewFeatType]   = useState<'window' | 'door-swing' | 'wall-segment'>('window');
   const [newFeatWall,   setNewFeatWall]   = useState<WallSide>('bottom');
   const [newFeatOffset, setNewFeatOffset] = useState(12);
   const [newFeatLength, setNewFeatLength] = useState(36);
   const [newFeatHinge,  setNewFeatHinge]  = useState<'left' | 'right'>('left');
+  const [newFeatSwingDir, setNewFeatSwingDir] = useState<'in' | 'out'>('in');
 
   const selectedItem    = furniture.find(f => f.id === selectedId) ?? null;
   const selectedFeature = wallFeatures.features.find(f => f.id === wallFeatures.selectedFeatureId) ?? null;
@@ -151,8 +152,10 @@ export default function RoomPlanner() {
   function addWallFeature() {
     if (newFeatType === 'window') {
       wallFeatures.add({ type: 'window', wall: newFeatWall, offsetIn: newFeatOffset, lengthIn: newFeatLength });
+    } else if (newFeatType === 'wall-segment') {
+      wallFeatures.add({ type: 'wall-segment', wall: newFeatWall, offsetIn: newFeatOffset, lengthIn: newFeatLength });
     } else {
-      wallFeatures.add({ type: 'door-swing', wall: newFeatWall, offsetIn: newFeatOffset, swingIn: newFeatLength, hingeDirection: newFeatHinge });
+      wallFeatures.add({ type: 'door-swing', wall: newFeatWall, offsetIn: newFeatOffset, swingIn: newFeatLength, hingeDirection: newFeatHinge, swingDirection: newFeatSwingDir });
     }
   }
 
@@ -175,39 +178,53 @@ export default function RoomPlanner() {
           features={wallFeatures.features}
           selectedFeatureId={wallFeatures.selectedFeatureId}
           onFeatureClick={selectFeature}
+          onFeatureUpdate={wallFeatures.update}
           snapGridIn={snapEnabled ? snapGridIn : undefined}
         >
           {furniture.map((f) => {
+            const isOdd = f.rotation === 90 || f.rotation === 270;
             const isSnappable = snapEnabled && f.rotation % 90 === 0;
+            const rndW = toPixels(isOdd ? f.h : f.w);
+            const rndH = toPixels(isOdd ? f.w : f.h);
             return (
               <Rnd
                 key={f.id}
                 bounds="parent"
                 position={{ x: toPixels(f.x), y: toPixels(f.y) }}
-                size={{ width: toPixels(f.w), height: toPixels(f.h) }}
+                size={{ width: rndW, height: rndH }}
                 dragGrid={isSnappable ? [snapPx, snapPx] : undefined}
                 resizeGrid={isSnappable ? [snapPx, snapPx] : undefined}
+                onMouseDown={() => selectFurniture(f.id)}
                 onDragStop={(_, d) => move(f.id, d.x, d.y)}
                 onResizeStop={(_, _dir, ref, _delta, pos) =>
                   resize(f.id, ref.style.width, ref.style.height, pos.x, pos.y)
                 }
                 style={{
-                  background: f.color,
                   border: selectedId === f.id ? '2px solid #0066ff' : '1px solid #000',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 'bold',
                   cursor: 'grab',
-                  transform: f.rotation !== 0 ? `rotate(${f.rotation}deg)` : undefined,
+                  overflow: 'visible',
                 }}
               >
                 <div
-                  style={{ textAlign: 'center', pointerEvents: 'none' }}
-                  onMouseDown={() => selectFurniture(f.id)}
+                  style={{
+                    position: 'absolute',
+                    width: toPixels(f.w),
+                    height: toPixels(f.h),
+                    top: '50%',
+                    left: '50%',
+                    transform: `translate(-50%, -50%)${f.rotation !== 0 ? ` rotate(${f.rotation}deg)` : ''}`,
+                    background: f.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 12,
+                    fontWeight: 'bold',
+                    pointerEvents: 'none',
+                  }}
                 >
-                  {f.name}<br />{Math.round(f.w)}" × {Math.round(f.h)}"
+                  <div style={{ textAlign: 'center' }}>
+                    {f.name}<br />{Math.round(f.w)}" × {Math.round(f.h)}"
+                  </div>
                 </div>
               </Rnd>
             );
@@ -383,10 +400,11 @@ export default function RoomPlanner() {
             <select
               style={inputStyle}
               value={newFeatType}
-              onChange={e => setNewFeatType(e.target.value as 'window' | 'door-swing')}
+              onChange={e => setNewFeatType(e.target.value as 'window' | 'door-swing' | 'wall-segment')}
             >
               <option value="window">Window</option>
               <option value="door-swing">Door</option>
+              <option value="wall-segment">Wall</option>
             </select>
           </FieldRow>
           <FieldRow label="Wall">
@@ -419,28 +437,52 @@ export default function RoomPlanner() {
             />
           </FieldRow>
           {newFeatType === 'door-swing' && (
-            <FieldRow label="Hinge side">
-              <div style={{ display: 'flex', gap: 6 }}>
-                {(['left', 'right'] as const).map(side => (
-                  <button
-                    key={side}
-                    onClick={() => setNewFeatHinge(side)}
-                    style={{
-                      flex: 1,
-                      padding: '4px 0',
-                      border: '1px solid #ccc',
-                      borderRadius: 4,
-                      background: newFeatHinge === side ? '#0066ff' : '#fff',
-                      color: newFeatHinge === side ? '#fff' : '#333',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                    }}
-                  >
-                    {side.charAt(0).toUpperCase() + side.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </FieldRow>
+            <>
+              <FieldRow label="Hinge side">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['left', 'right'] as const).map(side => (
+                    <button
+                      key={side}
+                      onClick={() => setNewFeatHinge(side)}
+                      style={{
+                        flex: 1,
+                        padding: '4px 0',
+                        border: '1px solid #ccc',
+                        borderRadius: 4,
+                        background: newFeatHinge === side ? '#0066ff' : '#fff',
+                        color: newFeatHinge === side ? '#fff' : '#333',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                      }}
+                    >
+                      {side.charAt(0).toUpperCase() + side.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </FieldRow>
+              <FieldRow label="Swing direction">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['in', 'out'] as const).map(dir => (
+                    <button
+                      key={dir}
+                      onClick={() => setNewFeatSwingDir(dir)}
+                      style={{
+                        flex: 1,
+                        padding: '4px 0',
+                        border: '1px solid #ccc',
+                        borderRadius: 4,
+                        background: newFeatSwingDir === dir ? '#0066ff' : '#fff',
+                        color: newFeatSwingDir === dir ? '#fff' : '#333',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                      }}
+                    >
+                      {dir === 'in' ? 'Into room' : 'Out of room'}
+                    </button>
+                  ))}
+                </div>
+              </FieldRow>
+            </>
           )}
           <button
             onClick={addWallFeature}
@@ -497,31 +539,73 @@ export default function RoomPlanner() {
                   </button>
                 </div>
               ))}
-              {selectedFeature && selectedFeature.type === 'door-swing' && (
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>Selected door</div>
-                  <FieldRow label="Hinge side">
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {(['left', 'right'] as const).map(side => (
-                        <button
-                          key={side}
-                          onClick={() => wallFeatures.update(selectedFeature.id, { hingeDirection: side })}
-                          style={{
-                            flex: 1,
-                            padding: '4px 0',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            background: selectedFeature.hingeDirection === side ? '#0066ff' : '#fff',
-                            color: selectedFeature.hingeDirection === side ? '#fff' : '#333',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                          }}
-                        >
-                          {side.charAt(0).toUpperCase() + side.slice(1)}
-                        </button>
-                      ))}
-                    </div>
+              {selectedFeature && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee' }}>
+                  <div style={{ fontSize: 11, color: '#888', marginBottom: 6 }}>
+                    Selected {selectedFeature.type === 'window' ? 'window' : selectedFeature.type === 'wall-segment' ? 'wall segment' : 'door'}
+                  </div>
+                  <FieldRow label="Offset from corner (in)">
+                    <input
+                      type="number"
+                      style={inputStyle}
+                      min={0}
+                      value={Math.round(selectedFeature.offsetIn)}
+                      onChange={e => wallFeatures.update(selectedFeature.id, { offsetIn: Number(e.target.value) })}
+                    />
                   </FieldRow>
+                  {(selectedFeature.type === 'window' || selectedFeature.type === 'wall-segment') && (
+                    <FieldRow label="Width (in)">
+                      <input
+                        type="number"
+                        style={inputStyle}
+                        min={6}
+                        value={Math.round(selectedFeature.lengthIn)}
+                        onChange={e => wallFeatures.update(selectedFeature.id, { lengthIn: Number(e.target.value) })}
+                      />
+                    </FieldRow>
+                  )}
+                  {selectedFeature.type === 'door-swing' && (
+                    <>
+                      <FieldRow label="Hinge side">
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {(['left', 'right'] as const).map(side => (
+                            <button
+                              key={side}
+                              onClick={() => wallFeatures.update(selectedFeature.id, { hingeDirection: side })}
+                              style={{
+                                flex: 1, padding: '4px 0',
+                                border: '1px solid #ccc', borderRadius: 4,
+                                background: selectedFeature.hingeDirection === side ? '#0066ff' : '#fff',
+                                color: selectedFeature.hingeDirection === side ? '#fff' : '#333',
+                                cursor: 'pointer', fontSize: 12,
+                              }}
+                            >
+                              {side.charAt(0).toUpperCase() + side.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </FieldRow>
+                      <FieldRow label="Swing direction">
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {(['in', 'out'] as const).map(dir => (
+                            <button
+                              key={dir}
+                              onClick={() => wallFeatures.update(selectedFeature.id, { swingDirection: dir })}
+                              style={{
+                                flex: 1, padding: '4px 0',
+                                border: '1px solid #ccc', borderRadius: 4,
+                                background: selectedFeature.swingDirection === dir ? '#0066ff' : '#fff',
+                                color: selectedFeature.swingDirection === dir ? '#fff' : '#333',
+                                cursor: 'pointer', fontSize: 12,
+                              }}
+                            >
+                              {dir === 'in' ? 'Into room' : 'Out of room'}
+                            </button>
+                          ))}
+                        </div>
+                      </FieldRow>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -534,8 +618,8 @@ export default function RoomPlanner() {
             <tbody>
               {[
                 ['Click',           'Select item'],
-                ['Drag',            'Move furniture'],
-                ['Resize handles',  'Resize furniture'],
+                ['Drag',            'Move furniture or wall feature'],
+                ['Resize handles',  'Resize furniture or wall feature'],
                 ['R',               'Rotate selected furniture'],
                 ['Delete / ⌫',      'Remove selected item'],
               ].map(([key, desc]) => (

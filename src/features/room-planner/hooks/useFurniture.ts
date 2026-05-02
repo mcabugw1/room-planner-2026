@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { toInches } from '../../../utils/coordinates';
 
-export type RotationDeg = 0 | 45 | 90 | 135 | 180 | 225 | 270 | 315;
+export type RotationDeg = 0 | 90 | 180 | 270;
 
-const ROTATION_STEPS: RotationDeg[] = [0, 45, 90, 135, 180, 225, 270, 315];
+const ROTATION_STEPS: RotationDeg[] = [0, 90, 180, 270];
 
 export interface FurnitureItem {
   id: number;
@@ -32,13 +32,17 @@ export function useFurniture() {
 
   function resize(id: number, pWidth: string, pHeight: string, px: number, py: number) {
     setFurniture(prev =>
-      prev.map(f => f.id === id ? {
-        ...f,
-        w: toInches(parseInt(pWidth)),
-        h: toInches(parseInt(pHeight)),
-        x: toInches(px),
-        y: toInches(py),
-      } : f)
+      prev.map(f => {
+        if (f.id !== id) return f;
+        const isOdd = f.rotation === 90 || f.rotation === 270;
+        return {
+          ...f,
+          w: toInches(parseInt(isOdd ? pHeight : pWidth)),
+          h: toInches(parseInt(isOdd ? pWidth : pHeight)),
+          x: toInches(px),
+          y: toInches(py),
+        };
+      })
     );
   }
 
