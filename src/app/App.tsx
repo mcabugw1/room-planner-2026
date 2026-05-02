@@ -1,4 +1,3 @@
-import React from 'react';
 import RoomPlanner from '../features/room-planner/components/RoomPlanner';
 
 export default function App() {
