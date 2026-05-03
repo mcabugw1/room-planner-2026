@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Rnd } from 'react-rnd';
-import { toPixels } from '../../../utils/coordinates';
+import { toPixels, formatDim } from '../../../utils/coordinates';
+import type { UnitSystem } from '../../../utils/coordinates';
 import { useFurniture } from '../hooks/useFurniture';
 import { useWallFeatures } from '../hooks/useWallFeatures';
 import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
@@ -23,7 +24,7 @@ const PRESETS: { label: string; w: number; h: number }[] = [
   { label: 'Custom',     w: 0,   h: 0   },
 ];
 
-const SNAP_SIZES = [6, 12, 24] as const;
+const SNAP_SIZES = [0.5, 1, 6, 12, 24] as const;
 
 const WALL_LABELS: Record<WallSide, string> = {
   top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left',
@@ -70,8 +71,19 @@ export default function RoomPlanner() {
   const [layout, setLayout]           = useState<RoomLayout>({ ...DEFAULT_ROOM, features: [] });
   const [selectedId, setSelectedId]   = useState<number | null>(null);
 
+  const [unitSystem, setUnitSystemState] = useState<UnitSystem>(
+    () => (localStorage.getItem('roomPlanner.unitSystem') as UnitSystem | null) ?? 'ft-in'
+  );
+
+  function setUnitSystem(u: UnitSystem) {
+    setUnitSystemState(u);
+    localStorage.setItem('roomPlanner.unitSystem', u);
+  }
+
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [snapGridIn, setSnapGridIn]   = useState<typeof SNAP_SIZES[number]>(6);
+
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [layoutsOpen,  setLayoutsOpen]  = useState(true);
   const [dimOpen,      setDimOpen]      = useState(true);
@@ -110,9 +122,11 @@ export default function RoomPlanner() {
 
   const selectedItem    = furniture.find(f => f.id === selectedId) ?? null;
   const selectedFeature = wallFeatures.features.find(f => f.id === wallFeatures.selectedFeatureId) ?? null;
-  const snapPx   = toPixels(snapGridIn);
-  const widthFt  = Math.round(layout.widthIn  / 12);
-  const heightFt = Math.round(layout.heightIn / 12);
+  const snapPx        = toPixels(snapGridIn);
+  const widthFt       = Math.floor(layout.widthIn  / 12);
+  const widthInchPart = layout.widthIn  - widthFt  * 12;
+  const heightFt      = Math.floor(layout.heightIn / 12);
+  const heightInchPart = layout.heightIn - heightFt * 12;
 
   const measurementArrows = useMemo<MeasurementArrow[]>(() => {
     const arrows: MeasurementArrow[] = [];
@@ -124,8 +138,11 @@ export default function RoomPlanner() {
       const b = furniture.find(f => f.id === pairIds[1]);
       if (a && b) arrows.push(measureTwoObjects(a, b));
     }
-    return arrows;
-  }, [showNeighbors, showPair, pairIds, furniture, layout]);
+    return arrows.map(a => ({
+      ...a,
+      label: a.isOverlap ? 'overlap' : formatDim(a.gapIn, unitSystem),
+    }));
+  }, [showNeighbors, showPair, pairIds, furniture, layout, unitSystem]);
 
   function selectFurniture(id: number) {
     if (showPair) {
@@ -172,12 +189,18 @@ export default function RoomPlanner() {
     if (p.w > 0) setLayout(prev => ({ ...prev, widthIn: p.w, heightIn: p.h }));
   }
 
-  function setWidthFt(ft: number) {
-    if (ft >= 4 && ft <= 60) setLayout(prev => ({ ...prev, widthIn: ft * 12 }));
+  function setWidthDims(ft: number, inch: number) {
+    if (inch >= 12) { ft += Math.floor(inch / 12); inch = inch % 12; }
+    if (inch < 0)   { const b = Math.ceil(-inch / 12); ft -= b; inch += b * 12; }
+    const total = ft * 12 + inch;
+    if (total >= 48 && total <= 720) setLayout(prev => ({ ...prev, widthIn: total }));
   }
 
-  function setHeightFt(ft: number) {
-    if (ft >= 4 && ft <= 60) setLayout(prev => ({ ...prev, heightIn: ft * 12 }));
+  function setHeightDims(ft: number, inch: number) {
+    if (inch >= 12) { ft += Math.floor(inch / 12); inch = inch % 12; }
+    if (inch < 0)   { const b = Math.ceil(-inch / 12); ft -= b; inch += b * 12; }
+    const total = ft * 12 + inch;
+    if (total >= 48 && total <= 720) setLayout(prev => ({ ...prev, heightIn: total }));
   }
 
   function addWallFeature() {
@@ -191,17 +214,42 @@ export default function RoomPlanner() {
   }
 
   function featureLabel(f: typeof wallFeatures.features[number]) {
-    const wall = WALL_LABELS[f.wall];
-    if (f.type === 'window')       return `Window — ${wall} +${f.offsetIn}"`;
-    if (f.type === 'door-swing')   return `Door — ${wall} +${f.offsetIn}"`;
-    return `Wall — ${wall} +${f.offsetIn}"`;
+    const wall   = WALL_LABELS[f.wall];
+    const offset = formatDim(f.offsetIn, unitSystem);
+    if (f.type === 'window')     return `Window — ${wall} +${offset}`;
+    if (f.type === 'door-swing') return `Door — ${wall} +${offset}`;
+    return `Wall — ${wall} +${offset}`;
   }
 
   return (
     <div className="planner">
 
+      <div
+        className={`sidebar-backdrop${mobileSidebarOpen ? ' sidebar-backdrop--visible' : ''}`}
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+
       {/* ── Left sidebar ── */}
-      <aside className="sidebar">
+      <aside className={`sidebar${mobileSidebarOpen ? ' sidebar--open' : ''}`}>
+        <div className="sidebar-drag-handle" />
+
+        {/* Unit system toggle */}
+        <div className="unit-toggle-row">
+          <div className="btn-toggle-group">
+            <button
+              onClick={() => setUnitSystem('ft-in')}
+              className={`btn-toggle${unitSystem === 'ft-in' ? ' btn-toggle--active' : ''}`}
+            >
+              ft + in
+            </button>
+            <button
+              onClick={() => setUnitSystem('in')}
+              className={`btn-toggle${unitSystem === 'in' ? ' btn-toggle--active' : ''}`}
+            >
+              in only
+            </button>
+          </div>
+        </div>
 
         {/* Layouts */}
         <SectionPanel title="Layouts" open={layoutsOpen} onToggle={() => setLayoutsOpen(o => !o)}>
@@ -230,26 +278,77 @@ export default function RoomPlanner() {
               ))}
             </select>
           </FieldRow>
-          <div className="dim-pair">
-            <FieldRow label="Width (ft)">
-              <input
-                type="number"
-                className="input"
-                min={4} max={60}
-                value={widthFt}
-                onChange={e => setWidthFt(Number(e.target.value))}
-              />
-            </FieldRow>
-            <FieldRow label="Depth (ft)">
-              <input
-                type="number"
-                className="input"
-                min={4} max={60}
-                value={heightFt}
-                onChange={e => setHeightFt(Number(e.target.value))}
-              />
-            </FieldRow>
-          </div>
+          {unitSystem === 'ft-in' ? (
+            <div className="dim-pair">
+              <FieldRow label="Width">
+                <div className="ft-in-input-group">
+                  <input
+                    type="number"
+                    className="input input--short"
+                    min={0} max={60}
+                    value={widthFt}
+                    onChange={e => setWidthDims(Number(e.target.value), widthInchPart)}
+                  />
+                  <span className="dim-unit">ft</span>
+                  <input
+                    type="number"
+                    className="input input--short"
+                    min={0} step={0.5}
+                    value={widthInchPart}
+                    onChange={e => setWidthDims(widthFt, Number(e.target.value))}
+                  />
+                  <span className="dim-unit">in</span>
+                </div>
+              </FieldRow>
+              <FieldRow label="Depth">
+                <div className="ft-in-input-group">
+                  <input
+                    type="number"
+                    className="input input--short"
+                    min={0} max={60}
+                    value={heightFt}
+                    onChange={e => setHeightDims(Number(e.target.value), heightInchPart)}
+                  />
+                  <span className="dim-unit">ft</span>
+                  <input
+                    type="number"
+                    className="input input--short"
+                    min={0} step={0.5}
+                    value={heightInchPart}
+                    onChange={e => setHeightDims(heightFt, Number(e.target.value))}
+                  />
+                  <span className="dim-unit">in</span>
+                </div>
+              </FieldRow>
+            </div>
+          ) : (
+            <div className="dim-pair">
+              <FieldRow label="Width (in)">
+                <input
+                  type="number"
+                  className="input"
+                  min={48} max={720} step={0.5}
+                  value={layout.widthIn}
+                  onChange={e => {
+                    const v = Number(e.target.value);
+                    if (v >= 48 && v <= 720) setLayout(prev => ({ ...prev, widthIn: v }));
+                  }}
+                />
+              </FieldRow>
+              <FieldRow label="Depth (in)">
+                <input
+                  type="number"
+                  className="input"
+                  min={48} max={720} step={0.5}
+                  value={layout.heightIn}
+                  onChange={e => {
+                    const v = Number(e.target.value);
+                    if (v >= 48 && v <= 720) setLayout(prev => ({ ...prev, heightIn: v }));
+                  }}
+                />
+              </FieldRow>
+            </div>
+          )}
         </SectionPanel>
 
         {/* Grid & Snap */}
@@ -303,8 +402,8 @@ export default function RoomPlanner() {
                   <input
                     type="number"
                     className="input"
-                    min={6} max={layout.widthIn}
-                    value={Math.round(selectedItem.w)}
+                    min={6} max={layout.widthIn} step={0.5}
+                    value={selectedItem.w}
                     onChange={e => update(selectedItem.id, { w: Number(e.target.value) })}
                   />
                 </FieldRow>
@@ -312,8 +411,8 @@ export default function RoomPlanner() {
                   <input
                     type="number"
                     className="input"
-                    min={6} max={layout.heightIn}
-                    value={Math.round(selectedItem.h)}
+                    min={6} max={layout.heightIn} step={0.5}
+                    value={selectedItem.h}
                     onChange={e => update(selectedItem.id, { h: Number(e.target.value) })}
                   />
                 </FieldRow>
@@ -372,7 +471,7 @@ export default function RoomPlanner() {
             <input
               type="number"
               className="input"
-              min={0}
+              min={0} step={0.5}
               value={newFeatOffset}
               onChange={e => setNewFeatOffset(Number(e.target.value))}
             />
@@ -381,7 +480,7 @@ export default function RoomPlanner() {
             <input
               type="number"
               className="input"
-              min={6}
+              min={6} step={0.5}
               value={newFeatLength}
               onChange={e => setNewFeatLength(Number(e.target.value))}
             />
@@ -449,8 +548,8 @@ export default function RoomPlanner() {
                     <input
                       type="number"
                       className="input"
-                      min={0}
-                      value={Math.round(selectedFeature.offsetIn)}
+                      min={0} step={0.5}
+                      value={selectedFeature.offsetIn}
                       onChange={e => wallFeatures.update(selectedFeature.id, { offsetIn: Number(e.target.value) })}
                     />
                   </FieldRow>
@@ -459,8 +558,8 @@ export default function RoomPlanner() {
                       <input
                         type="number"
                         className="input"
-                        min={6}
-                        value={Math.round(selectedFeature.lengthIn)}
+                        min={6} step={0.5}
+                        value={selectedFeature.lengthIn}
                         onChange={e => wallFeatures.update(selectedFeature.id, { lengthIn: Number(e.target.value) })}
                       />
                     </FieldRow>
@@ -558,7 +657,7 @@ export default function RoomPlanner() {
       {/* ── Canvas area ── */}
       <main className="canvas-area">
         <p className="canvas-meta">
-          {widthFt}' × {heightFt}' · Scale: 1" = 4 px
+          {formatDim(layout.widthIn, unitSystem)} × {formatDim(layout.heightIn, unitSystem)} · Scale: 1" = 4 px
           {snapEnabled && (
             <span className="canvas-snap-badge">⊞ {snapGridIn}" snap</span>
           )}
@@ -620,7 +719,7 @@ export default function RoomPlanner() {
                   }}
                 >
                   <div style={{ textAlign: 'center' }}>
-                    {f.name}<br />{Math.round(f.w)}" × {Math.round(f.h)}"
+                    {f.name}<br />{formatDim(f.w, unitSystem)} × {formatDim(f.h, unitSystem)}
                   </div>
                 </div>
               </Rnd>
@@ -628,6 +727,14 @@ export default function RoomPlanner() {
           })}
         </RoomCanvas>
       </main>
+
+      <button
+        className="sidebar-fab"
+        onClick={() => setMobileSidebarOpen(o => !o)}
+        aria-label={mobileSidebarOpen ? 'Close controls' : 'Open controls'}
+      >
+        {mobileSidebarOpen ? '✕' : '☰'}
+      </button>
 
     </div>
   );

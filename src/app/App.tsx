@@ -2,9 +2,9 @@ import RoomPlanner from '../features/room-planner/components/RoomPlanner';
 
 export default function App() {
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '2rem' }}>
-        <h1>Room Layout Planner</h1>
+    <div className="app-shell">
+      <header className="app-header">
+        <h1>Room Planner</h1>
       </header>
       <RoomPlanner />
     </div>
