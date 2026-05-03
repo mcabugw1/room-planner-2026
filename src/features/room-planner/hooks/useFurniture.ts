@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toInches } from '../../../utils/coordinates';
+import { createId } from '../../../utils/createId';
 
 export type RotationDeg = 0 | 90 | 180 | 270;
 
@@ -48,7 +49,7 @@ export function useFurniture() {
 
   function add() {
     setFurniture(prev => [...prev, {
-      id: Date.now(),
+      id: createId(),
       name: 'New Block',
       w: 24,
       h: 24,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { RoomFeature, WallSide } from '../types/room';
+import { createId } from '../../../utils/createId';
 
 export type AddableFeature =
   | { type: 'window';       wall: WallSide; offsetIn: number; lengthIn: number }
@@ -20,7 +21,7 @@ export function useWallFeatures(initialFeatures: RoomFeature[]) {
   const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(null);
 
   function add(feature: AddableFeature) {
-    const id = Date.now();
+    const id = createId();
     const newFeature = { ...feature, id } as RoomFeature;
     setFeatures(prev => [...prev, newFeature]);
     setSelectedFeatureId(id);

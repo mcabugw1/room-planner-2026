@@ -1,69 +1,11 @@
-import React, { useRef, useState } from 'react';
-import { toPixels, toInches } from '../../../utils/coordinates';
-import type { RoomFeature, RoomLayout, WallSide } from '../types/room';
+import React from 'react';
+import { toPixels } from '../../../utils/coordinates';
+import type { RoomFeature, RoomLayout } from '../types/room';
 import type { FeatureChanges } from '../hooks/useWallFeatures';
 import type { MeasurementArrow } from '../utils/measurements';
+import { useWallFeatureDrag, featureLenIn } from '../hooks/useWallFeatureDrag';
+import type { DragMode } from '../hooks/useWallFeatureDrag';
 import MeasurementOverlay from './MeasurementOverlay';
-
-const SNAP_IN = 15 / 4;
-const MIN_LEN_IN = 6;
-
-function featureLenIn(f: RoomFeature): number {
-  return f.type === 'door-swing' ? f.swingIn : f.lengthIn;
-}
-
-function wallDimIn(wall: WallSide, layout: RoomLayout): number {
-  return wall === 'top' || wall === 'bottom' ? layout.widthIn : layout.heightIn;
-}
-
-function computeMoveOffset(desired: number, len: number, wallLen: number, siblings: RoomFeature[]): number {
-  const sorted = [...siblings].sort((a, b) => a.offsetIn - b.offsetIn);
-  const center = desired + len / 2;
-  let lo = 0, hi = wallLen;
-  for (const s of sorted) {
-    const sEnd = s.offsetIn + featureLenIn(s);
-    if (sEnd <= center) lo = Math.max(lo, sEnd);
-    else if (s.offsetIn >= center) hi = Math.min(hi, s.offsetIn);
-  }
-  let off = Math.max(lo, Math.min(hi - len, desired));
-  for (const s of sorted) {
-    const sEnd = s.offsetIn + featureLenIn(s);
-    if (Math.abs(off - sEnd) < SNAP_IN) { off = sEnd; break; }
-    if (Math.abs(off + len - s.offsetIn) < SNAP_IN) { off = s.offsetIn - len; break; }
-  }
-  if (Math.abs(off) < SNAP_IN) off = 0;
-  if (Math.abs(off + len - wallLen) < SNAP_IN) off = wallLen - len;
-  return Math.max(lo, Math.min(hi - len, off));
-}
-
-function computeResizeEnd(offsetIn: number, desiredLen: number, wallLen: number, siblings: RoomFeature[]): number {
-  const rNeighbor = siblings
-    .filter(s => s.offsetIn > offsetIn)
-    .sort((a, b) => a.offsetIn - b.offsetIn)[0];
-  const maxEnd = rNeighbor?.offsetIn ?? wallLen;
-  let len = Math.max(MIN_LEN_IN, Math.min(maxEnd - offsetIn, desiredLen));
-  if (rNeighbor && Math.abs(offsetIn + len - rNeighbor.offsetIn) < SNAP_IN) len = rNeighbor.offsetIn - offsetIn;
-  if (Math.abs(offsetIn + len - wallLen) < SNAP_IN) len = wallLen - offsetIn;
-  return Math.max(MIN_LEN_IN, Math.min(maxEnd - offsetIn, len));
-}
-
-function computeResizeStart(desiredOff: number, fixedEnd: number, siblings: RoomFeature[]): [number, number] {
-  const lNeighbor = siblings
-    .filter(s => s.offsetIn + featureLenIn(s) <= fixedEnd - MIN_LEN_IN)
-    .sort((a, b) => (b.offsetIn + featureLenIn(b)) - (a.offsetIn + featureLenIn(a)))[0];
-  const minOff = lNeighbor ? lNeighbor.offsetIn + featureLenIn(lNeighbor) : 0;
-  let off = Math.max(minOff, Math.min(fixedEnd - MIN_LEN_IN, desiredOff));
-  if (Math.abs(off) < SNAP_IN) off = 0;
-  if (lNeighbor) {
-    const lEnd = lNeighbor.offsetIn + featureLenIn(lNeighbor);
-    if (Math.abs(off - lEnd) < SNAP_IN) off = lEnd;
-  }
-  off = Math.max(minOff, Math.min(fixedEnd - MIN_LEN_IN, off));
-  return [off, fixedEnd - off];
-}
-
-type LiveState = { id: number; offsetIn: number; lengthIn: number } | null;
-type DragMode = 'move' | 'resize-start' | 'resize-end';
 
 interface Props {
   layout: RoomLayout;
@@ -76,81 +18,24 @@ interface Props {
   children?: React.ReactNode;
 }
 
+function resizeHandleStyle(horizontal: boolean, end: 'start' | 'end', thickness: number): React.CSSProperties {
+  const perp = Math.floor((thickness - 8) / 2);
+  return {
+    position: 'absolute',
+    width: 8, height: 8,
+    background: 'var(--accent)', borderRadius: 2, zIndex: 10,
+    cursor: horizontal ? 'ew-resize' : 'ns-resize',
+    ...(horizontal
+      ? { [end === 'start' ? 'left' : 'right']: -4, top: perp }
+      : { [end === 'start' ? 'top' : 'bottom']: -4, left: perp }),
+  };
+}
+
 export default function RoomCanvas({
   layout, features, selectedFeatureId, onFeatureClick, onFeatureUpdate, snapGridIn, measurementArrows, children,
 }: Props) {
   const gridPx = snapGridIn ? toPixels(snapGridIn) : null;
-  const [liveState, setLiveState] = useState<LiveState>(null);
-  const dragRef = useRef<{
-    featureId: number; mode: DragMode;
-    startMousePx: number; startOffsetIn: number; startLengthIn: number; wall: WallSide;
-  } | null>(null);
-
-  function startDrag(e: React.MouseEvent, feature: RoomFeature, mode: DragMode) {
-    e.stopPropagation();
-    e.preventDefault();
-    onFeatureClick(feature.id);
-
-    const isH = feature.wall === 'top' || feature.wall === 'bottom';
-    const startLenIn = featureLenIn(feature);
-    let lastLive = { id: feature.id, offsetIn: feature.offsetIn, lengthIn: startLenIn };
-
-    dragRef.current = {
-      featureId: feature.id, mode,
-      startMousePx: isH ? e.clientX : e.clientY,
-      startOffsetIn: feature.offsetIn, startLengthIn: startLenIn, wall: feature.wall,
-    };
-    document.body.style.userSelect = 'none';
-
-    function onMouseMove(me: MouseEvent) {
-      const d = dragRef.current!;
-      const isHoriz = d.wall === 'top' || d.wall === 'bottom';
-      const deltaIn = toInches((isHoriz ? me.clientX : me.clientY) - d.startMousePx);
-      const wallLen = wallDimIn(d.wall, layout);
-      const siblings = features.filter(f => f.id !== d.featureId && f.wall === d.wall);
-      let next: NonNullable<LiveState>;
-      if (d.mode === 'move') {
-        next = { id: d.featureId, offsetIn: computeMoveOffset(d.startOffsetIn + deltaIn, d.startLengthIn, wallLen, siblings), lengthIn: d.startLengthIn };
-      } else if (d.mode === 'resize-end') {
-        next = { id: d.featureId, offsetIn: d.startOffsetIn, lengthIn: computeResizeEnd(d.startOffsetIn, d.startLengthIn + deltaIn, wallLen, siblings) };
-      } else {
-        const [off, len] = computeResizeStart(d.startOffsetIn + deltaIn, d.startOffsetIn + d.startLengthIn, siblings);
-        next = { id: d.featureId, offsetIn: off, lengthIn: len };
-      }
-      lastLive = next;
-      setLiveState(next);
-    }
-
-    function onMouseUp() {
-      const d = dragRef.current!;
-      if (d.mode === 'move') {
-        onFeatureUpdate(d.featureId, { offsetIn: lastLive.offsetIn });
-      } else {
-        onFeatureUpdate(d.featureId, { offsetIn: lastLive.offsetIn, lengthIn: lastLive.lengthIn });
-      }
-      dragRef.current = null;
-      setLiveState(null);
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    }
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  }
-
-  function resizeHandleStyle(horizontal: boolean, end: 'start' | 'end', thickness: number): React.CSSProperties {
-    const perp = Math.floor((thickness - 8) / 2);
-    return {
-      position: 'absolute',
-      width: 8, height: 8,
-      background: 'var(--accent)', borderRadius: 2, zIndex: 10,
-      cursor: horizontal ? 'ew-resize' : 'ns-resize',
-      ...(horizontal
-        ? { [end === 'start' ? 'left' : 'right']: -4, top: perp }
-        : { [end === 'start' ? 'top' : 'bottom']: -4, left: perp }),
-    };
-  }
+  const { liveState, startDrag } = useWallFeatureDrag(layout, features, onFeatureClick, onFeatureUpdate);
 
   return (
     <div
@@ -184,7 +69,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Window"
               onClick={clickHandler}
-              onMouseDown={e => startDrag(e, liveFeature, 'move')}
+              onMouseDown={e => startDrag(e, liveFeature, 'move' as DragMode)}
               style={{
                 position: 'absolute',
                 left: feature.wall === 'left' ? -5 : horiz ? toPixels(offsetIn) : undefined,
@@ -214,7 +99,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Wall Segment"
               onClick={clickHandler}
-              onMouseDown={e => startDrag(e, liveFeature, 'move')}
+              onMouseDown={e => startDrag(e, liveFeature, 'move' as DragMode)}
               style={{
                 position: 'absolute',
                 left: feature.wall === 'left' ? -5 : horiz ? toPixels(offsetIn) : undefined,

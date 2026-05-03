@@ -201,13 +201,7 @@ export function measureTwoObjects(a: FurnitureItem, b: FurnitureItem): Measureme
   const ba = getBoundingBox(a);
   const bb = getBoundingBox(b);
 
-  // Closest points on each bounding box
-  const ax = clamp(bb.left + (bb.right - bb.left) / 2, ba.left, ba.right);
-  const ay = clamp(bb.top + (bb.bottom - bb.top) / 2, ba.top, ba.bottom);
-  const bx = clamp(ba.left + (ba.right - ba.left) / 2, bb.left, bb.right);
-  const by = clamp(ba.top + (ba.bottom - ba.top) / 2, bb.top, bb.bottom);
-
-  // Refine: closest point on A to center of B
+  // Closest point on A to center of B, and vice versa
   const cpAx = clamp((bb.left + bb.right) / 2, ba.left, ba.right);
   const cpAy = clamp((bb.top + bb.bottom) / 2, ba.top, ba.bottom);
   const cpBx = clamp((ba.left + ba.right) / 2, bb.left, bb.right);
@@ -232,7 +226,6 @@ export function measureTwoObjects(a: FurnitureItem, b: FurnitureItem): Measureme
     fromY = cpAy;
     toX = cpBx;
     toY = cpBy;
-    void ax; void ay; void bx; void by;
   }
 
   return makeArrow(fromX, fromY, toX, toY, gapIn);
