@@ -1,10 +1,10 @@
 import React from 'react';
 import { toPixels } from '../../../utils/coordinates';
 import type { RoomFeature, RoomLayout } from '../types/room';
-import type { FeatureChanges } from '../hooks/useWallFeatures';
 import type { MeasurementArrow } from '../utils/measurements';
-import { useWallFeatureDrag, featureLenIn } from '../hooks/useWallFeatureDrag';
-import type { DragMode } from '../hooks/useWallFeatureDrag';
+import { featureLenIn } from '../hooks/useWallFeatureDrag';
+import type { DragMode, LiveState } from '../hooks/useWallFeatureDrag';
+import { getDoorSwingStyle } from '../utils/wallFeatureStyles';
 import MeasurementOverlay from './MeasurementOverlay';
 
 interface Props {
@@ -12,7 +12,8 @@ interface Props {
   features: RoomFeature[];
   selectedFeatureId: number | null;
   onFeatureClick: (id: number) => void;
-  onFeatureUpdate: (id: number, changes: FeatureChanges) => void;
+  liveState: LiveState;
+  onFeatureMouseDown: (e: React.MouseEvent, feature: RoomFeature, mode: DragMode) => void;
   snapGridIn?: number;
   measurementArrows?: MeasurementArrow[];
   children?: React.ReactNode;
@@ -32,10 +33,10 @@ function resizeHandleStyle(horizontal: boolean, end: 'start' | 'end', thickness:
 }
 
 export default function RoomCanvas({
-  layout, features, selectedFeatureId, onFeatureClick, onFeatureUpdate, snapGridIn, measurementArrows, children,
+  layout, features, selectedFeatureId, onFeatureClick,
+  liveState, onFeatureMouseDown, snapGridIn, measurementArrows, children,
 }: Props) {
   const gridPx = snapGridIn ? toPixels(snapGridIn) : null;
-  const { liveState, startDrag } = useWallFeatureDrag(layout, features, onFeatureClick, onFeatureUpdate);
 
   return (
     <div
@@ -69,7 +70,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Window"
               onClick={clickHandler}
-              onMouseDown={e => startDrag(e, liveFeature, 'move' as DragMode)}
+              onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'move')}
               style={{
                 position: 'absolute',
                 left: feature.wall === 'left' ? -5 : horiz ? toPixels(offsetIn) : undefined,
@@ -84,8 +85,8 @@ export default function RoomCanvas({
               }}
             >
               {selected && <>
-                <div style={resizeHandleStyle(horiz, 'start', 10)} onMouseDown={e => startDrag(e, liveFeature, 'resize-start')} />
-                <div style={resizeHandleStyle(horiz, 'end', 10)} onMouseDown={e => startDrag(e, liveFeature, 'resize-end')} />
+                <div style={resizeHandleStyle(horiz, 'start', 10)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-start')} />
+                <div style={resizeHandleStyle(horiz, 'end', 10)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-end')} />
               </>}
             </div>
           );
@@ -99,7 +100,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Wall Segment"
               onClick={clickHandler}
-              onMouseDown={e => startDrag(e, liveFeature, 'move' as DragMode)}
+              onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'move')}
               style={{
                 position: 'absolute',
                 left: feature.wall === 'left' ? -5 : horiz ? toPixels(offsetIn) : undefined,
@@ -114,8 +115,8 @@ export default function RoomCanvas({
               }}
             >
               {selected && <>
-                <div style={resizeHandleStyle(horiz, 'start', 5)} onMouseDown={e => startDrag(e, liveFeature, 'resize-start')} />
-                <div style={resizeHandleStyle(horiz, 'end', 5)} onMouseDown={e => startDrag(e, liveFeature, 'resize-end')} />
+                <div style={resizeHandleStyle(horiz, 'start', 5)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-start')} />
+                <div style={resizeHandleStyle(horiz, 'end', 5)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-end')} />
               </>}
             </div>
           );
@@ -123,46 +124,13 @@ export default function RoomCanvas({
 
         if (feature.type === 'door-swing') {
           const sw = toPixels(feature.swingIn);
-          const swingOut = feature.swingDirection === 'out';
-          let posStyle: React.CSSProperties = {};
-          let borderRadius = '';
-
-          if (feature.wall === 'right') {
-            posStyle = swingOut
-              ? { left: '100%', top: toPixels(offsetIn) }
-              : { right: 0, top: toPixels(offsetIn) };
-            borderRadius = swingOut
-              ? (feature.hingeDirection === 'left' ? '0 0 100% 0' : '0 100% 0 0')
-              : (feature.hingeDirection === 'left' ? '0 0 0 100%' : '100% 0 0 0');
-          } else if (feature.wall === 'left') {
-            posStyle = swingOut
-              ? { right: '100%', top: toPixels(offsetIn) }
-              : { left: 0, top: toPixels(offsetIn) };
-            borderRadius = swingOut
-              ? (feature.hingeDirection === 'right' ? '0 0 0 100%' : '100% 0 0 0')
-              : (feature.hingeDirection === 'right' ? '0 0 100% 0' : '0 100% 0 0');
-          } else if (feature.wall === 'bottom') {
-            posStyle = swingOut
-              ? { top: '100%', left: toPixels(offsetIn) }
-              : { bottom: 0, left: toPixels(offsetIn) };
-            borderRadius = swingOut
-              ? (feature.hingeDirection === 'left' ? '0 0 0 100%' : '0 0 100% 0')
-              : (feature.hingeDirection === 'left' ? '100% 0 0 0' : '0 100% 0 0');
-          } else {
-            posStyle = swingOut
-              ? { bottom: '100%', left: toPixels(offsetIn) }
-              : { top: 0, left: toPixels(offsetIn) };
-            borderRadius = swingOut
-              ? (feature.hingeDirection === 'left' ? '100% 0 0 0' : '0 100% 0 0')
-              : (feature.hingeDirection === 'left' ? '0 0 0 100%' : '0 0 100% 0');
-          }
-
+          const { posStyle, borderRadius } = getDoorSwingStyle(feature, offsetIn);
           return (
             <div
               key={feature.id}
               title="Door"
               onClick={clickHandler}
-              onMouseDown={e => startDrag(e, feature, 'move')}
+              onMouseDown={e => onFeatureMouseDown(e, feature, 'move')}
               style={{
                 position: 'absolute',
                 ...posStyle,

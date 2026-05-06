@@ -1,18 +1,10 @@
-import { useEffect, useMemo, useCallback } from 'react';
 import { Rnd } from 'react-rnd';
 import { toPixels, formatDim } from '../../../utils/coordinates';
-import { useFurniture } from '../hooks/useFurniture';
-import { useWallFeatures } from '../hooks/useWallFeatures';
-import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
-import { useRoomSession, PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
-import { useRoomUI } from '../hooks/useRoomUI';
+import { useRoomState } from '../hooks/useRoomState';
+import { PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
 import RoomCanvas from './RoomCanvas';
 import LayoutsPanel from './LayoutsPanel';
-import { DEFAULT_ROOM } from '../data/room';
-import { findNearestNeighbors, measureTwoObjects } from '../utils/measurements';
-import type { MeasurementArrow } from '../utils/measurements';
-import type { LayoutSnapshot } from '../services/layoutDb';
-import type { WallSide } from '../types/room';
+import type { WallSide, DoorSwingFeature } from '../types/room';
 
 const WALL_LABELS: Record<WallSide, string> = {
   top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left',
@@ -53,85 +45,16 @@ function FieldRow({ label, children }: { label?: string; children: React.ReactNo
 }
 
 export default function RoomPlanner() {
-  const { furniture, move, resize, add, update, remove, rotate, reset: resetFurniture } = useFurniture();
-  const wallFeatures = useWallFeatures(DEFAULT_ROOM.features);
-  const session = useRoomSession({ ...DEFAULT_ROOM, features: [] });
-  const ui = useRoomUI();
+  const room = useRoomState();
+  const { session, ui, measurement, persistence, drag, derived, selectFurniture, selectFeature, restore } = room;
+  const f = room.furniture;
+  const wf = room.wallFeatures;
 
-  const snapshot = useMemo<LayoutSnapshot>(() => ({
-    widthIn: session.layout.widthIn,
-    heightIn: session.layout.heightIn,
-    features: wallFeatures.features,
-    furniture,
-  }), [session.layout.widthIn, session.layout.heightIn, wallFeatures.features, furniture]);
-
-  const restore = useCallback((s: LayoutSnapshot) => {
-    session.applySnapshot(s.widthIn, s.heightIn);
-    wallFeatures.reset(s.features);
-    resetFurniture(s.furniture);
-  }, [session, wallFeatures, resetFurniture]);
-
-  const persistence = useLayoutPersistence(snapshot, restore);
-
-  const selectedItem    = furniture.find(f => f.id === session.selectedId) ?? null;
-  const selectedFeature = wallFeatures.features.find(f => f.id === wallFeatures.selectedFeatureId) ?? null;
-
-  const measurementArrows = useMemo<MeasurementArrow[]>(() => {
-    const arrows: MeasurementArrow[] = [];
-    if (session.showNeighbors) {
-      arrows.push(...findNearestNeighbors(furniture, session.layout));
-    }
-    if (session.showPair && session.pairIds[0] !== null && session.pairIds[1] !== null) {
-      const a = furniture.find(f => f.id === session.pairIds[0]);
-      const b = furniture.find(f => f.id === session.pairIds[1]);
-      if (a && b) arrows.push(measureTwoObjects(a, b));
-    }
-    return arrows.map(a => ({
-      ...a,
-      label: a.isOverlap ? 'overlap' : formatDim(a.gapIn, session.unitSystem),
-    }));
-  }, [session.showNeighbors, session.showPair, session.pairIds, furniture, session.layout, session.unitSystem]);
-
-  function selectFurniture(id: number) {
-    if (session.showPair) {
-      session.setPairIds(prev => prev[0] === null ? [id, null] : [prev[0], id]);
-      return;
-    }
-    session.setSelectedId(id);
-    wallFeatures.select(null);
-  }
-
-  function selectFeature(id: number) {
-    wallFeatures.select(id);
-    session.setSelectedId(null);
-  }
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-      if (e.key === 'r' || e.key === 'R') {
-        if (session.selectedId !== null) rotate(session.selectedId);
-        return;
-      }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (session.selectedId !== null) {
-          remove(session.selectedId);
-          session.setSelectedId(null);
-        } else if (wallFeatures.selectedFeatureId !== null) {
-          wallFeatures.remove(wallFeatures.selectedFeatureId);
-        }
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [session.selectedId, session, wallFeatures, rotate, remove]);
-
-  function featureLabel(f: typeof wallFeatures.features[number]) {
-    const wall   = WALL_LABELS[f.wall];
-    const offset = formatDim(f.offsetIn, session.unitSystem);
-    if (f.type === 'window')     return `Window — ${wall} +${offset}`;
-    if (f.type === 'door-swing') return `Door — ${wall} +${offset}`;
+  function featureLabel(feat: typeof wf.features[number]) {
+    const wall   = WALL_LABELS[feat.wall];
+    const offset = formatDim(feat.offsetIn, session.unitSystem);
+    if (feat.type === 'window')     return `Window — ${wall} +${offset}`;
+    if (feat.type === 'door-swing') return `Door — ${wall} +${offset}`;
     return `Wall — ${wall} +${offset}`;
   }
 
@@ -296,19 +219,19 @@ export default function RoomPlanner() {
 
         {/* Furniture */}
         <SectionPanel title="Furniture" open={ui.propOpen} onToggle={ui.toggleProp}>
-          <button className="btn-primary" onClick={() => add()}>
+          <button className="btn-primary" onClick={() => f.add()}>
             + Add Furniture
           </button>
 
-          {selectedItem ? (
+          {derived.selectedItem ? (
             <div>
               <div className="selected-label">Selected item</div>
               <FieldRow label="Name">
                 <input
                   type="text"
                   className="input"
-                  value={selectedItem.name}
-                  onChange={e => update(selectedItem.id, { name: e.target.value })}
+                  value={derived.selectedItem.name}
+                  onChange={e => f.update(derived.selectedItem!.id, { name: e.target.value })}
                 />
               </FieldRow>
               <div className="dim-pair">
@@ -317,8 +240,8 @@ export default function RoomPlanner() {
                     type="number"
                     className="input"
                     min={6} max={session.layout.widthIn} step={0.5}
-                    value={selectedItem.w}
-                    onChange={e => update(selectedItem.id, { w: Number(e.target.value) })}
+                    value={derived.selectedItem.w}
+                    onChange={e => f.update(derived.selectedItem!.id, { w: Number(e.target.value) })}
                   />
                 </FieldRow>
                 <FieldRow label="Depth (in)">
@@ -326,8 +249,8 @@ export default function RoomPlanner() {
                     type="number"
                     className="input"
                     min={6} max={session.layout.heightIn} step={0.5}
-                    value={selectedItem.h}
-                    onChange={e => update(selectedItem.id, { h: Number(e.target.value) })}
+                    value={derived.selectedItem.h}
+                    onChange={e => f.update(derived.selectedItem!.id, { h: Number(e.target.value) })}
                   />
                 </FieldRow>
               </div>
@@ -335,19 +258,19 @@ export default function RoomPlanner() {
                 <input
                   type="color"
                   className="input"
-                  value={selectedItem.color}
-                  onChange={e => update(selectedItem.id, { color: e.target.value })}
+                  value={derived.selectedItem.color}
+                  onChange={e => f.update(derived.selectedItem!.id, { color: e.target.value })}
                 />
               </FieldRow>
               <FieldRow label="Rotation">
                 <div className="rotation-display">
-                  {selectedItem.rotation}°
+                  {derived.selectedItem.rotation}°
                   <span className="rotation-hint">(R to rotate)</span>
                 </div>
               </FieldRow>
               <button
                 className="btn-destructive"
-                onClick={() => { remove(selectedItem.id); session.setSelectedId(null); }}
+                onClick={() => { f.remove(derived.selectedItem!.id); session.setSelectedId(null); }}
               >
                 Delete
               </button>
@@ -429,23 +352,23 @@ export default function RoomPlanner() {
               </FieldRow>
             </>
           )}
-          <button className="btn-primary" onClick={() => wallFeatures.add(ui.buildFeature())}>
+          <button className="btn-primary" onClick={() => wf.add(ui.buildFeature())}>
             + Add Feature
           </button>
 
-          {wallFeatures.features.length > 0 && (
+          {wf.features.length > 0 && (
             <div>
               <div className="feature-list-label">Placed features</div>
-              {wallFeatures.features.map(f => (
+              {wf.features.map(feat => (
                 <div
-                  key={f.id}
-                  onClick={() => selectFeature(f.id)}
-                  className={`feature-item${f.id === wallFeatures.selectedFeatureId ? ' feature-item--selected' : ''}`}
+                  key={feat.id}
+                  onClick={() => selectFeature(feat.id)}
+                  className={`feature-item${feat.id === wf.selectedFeatureId ? ' feature-item--selected' : ''}`}
                 >
-                  <span>{featureLabel(f)}</span>
+                  <span>{featureLabel(feat)}</span>
                   <button
                     className="feature-remove"
-                    onClick={e => { e.stopPropagation(); wallFeatures.remove(f.id); }}
+                    onClick={e => { e.stopPropagation(); wf.remove(feat.id); }}
                     aria-label="Remove feature"
                   >
                     ×
@@ -453,61 +376,64 @@ export default function RoomPlanner() {
                 </div>
               ))}
 
-              {selectedFeature && (
+              {derived.selectedFeature && (
                 <div className="feature-editor">
                   <span className="feature-editor-label">
-                    {selectedFeature.type === 'window' ? 'Window' : selectedFeature.type === 'wall-segment' ? 'Wall segment' : 'Door'}
+                    {derived.selectedFeature.type === 'window' ? 'Window' : derived.selectedFeature.type === 'wall-segment' ? 'Wall segment' : 'Door'}
                   </span>
                   <FieldRow label="Offset from corner (in)">
                     <input
                       type="number"
                       className="input"
                       min={0} step={0.5}
-                      value={selectedFeature.offsetIn}
-                      onChange={e => wallFeatures.update(selectedFeature.id, { offsetIn: Number(e.target.value) })}
+                      value={derived.selectedFeature.offsetIn}
+                      onChange={e => wf.update(derived.selectedFeature!.id, { offsetIn: Number(e.target.value) })}
                     />
                   </FieldRow>
-                  {(selectedFeature.type === 'window' || selectedFeature.type === 'wall-segment') && (
+                  {(derived.selectedFeature.type === 'window' || derived.selectedFeature.type === 'wall-segment') && (
                     <FieldRow label="Width (in)">
                       <input
                         type="number"
                         className="input"
                         min={6} step={0.5}
-                        value={selectedFeature.lengthIn}
-                        onChange={e => wallFeatures.update(selectedFeature.id, { lengthIn: Number(e.target.value) })}
+                        value={derived.selectedFeature.lengthIn}
+                        onChange={e => wf.update(derived.selectedFeature!.id, { lengthIn: Number(e.target.value) })}
                       />
                     </FieldRow>
                   )}
-                  {selectedFeature.type === 'door-swing' && (
-                    <>
-                      <FieldRow label="Hinge side">
-                        <div className="btn-toggle-group">
-                          {(['left', 'right'] as const).map(side => (
-                            <button
-                              key={side}
-                              onClick={() => wallFeatures.update(selectedFeature.id, { hingeDirection: side })}
-                              className={`btn-toggle${selectedFeature.hingeDirection === side ? ' btn-toggle--active' : ''}`}
-                            >
-                              {side.charAt(0).toUpperCase() + side.slice(1)}
-                            </button>
-                          ))}
-                        </div>
-                      </FieldRow>
-                      <FieldRow label="Swing direction">
-                        <div className="btn-toggle-group">
-                          {(['in', 'out'] as const).map(dir => (
-                            <button
-                              key={dir}
-                              onClick={() => wallFeatures.update(selectedFeature.id, { swingDirection: dir })}
-                              className={`btn-toggle${selectedFeature.swingDirection === dir ? ' btn-toggle--active' : ''}`}
-                            >
-                              {dir === 'in' ? 'Into room' : 'Out of room'}
-                            </button>
-                          ))}
-                        </div>
-                      </FieldRow>
-                    </>
-                  )}
+                  {derived.selectedFeature.type === 'door-swing' && (() => {
+                    const door = derived.selectedFeature as DoorSwingFeature;
+                    return (
+                      <>
+                        <FieldRow label="Hinge side">
+                          <div className="btn-toggle-group">
+                            {(['left', 'right'] as const).map(side => (
+                              <button
+                                key={side}
+                                onClick={() => wf.update(door.id, { hingeDirection: side })}
+                                className={`btn-toggle${door.hingeDirection === side ? ' btn-toggle--active' : ''}`}
+                              >
+                                {side.charAt(0).toUpperCase() + side.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        </FieldRow>
+                        <FieldRow label="Swing direction">
+                          <div className="btn-toggle-group">
+                            {(['in', 'out'] as const).map(dir => (
+                              <button
+                                key={dir}
+                                onClick={() => wf.update(door.id, { swingDirection: dir })}
+                                className={`btn-toggle${door.swingDirection === dir ? ' btn-toggle--active' : ''}`}
+                              >
+                                {dir === 'in' ? 'Into room' : 'Out of room'}
+                              </button>
+                            ))}
+                          </div>
+                        </FieldRow>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -519,27 +445,24 @@ export default function RoomPlanner() {
           <FieldRow label="Mode">
             <div className="btn-toggle-group">
               <button
-                className={`btn-toggle${session.showNeighbors ? ' btn-toggle--active' : ''}`}
-                onClick={() => session.setShowNeighbors(o => !o)}
+                className={`btn-toggle${measurement.showNeighbors ? ' btn-toggle--active' : ''}`}
+                onClick={() => measurement.setShowNeighbors(o => !o)}
               >
                 All gaps
               </button>
               <button
-                className={`btn-toggle${session.showPair ? ' btn-toggle--active' : ''}`}
-                onClick={() => {
-                  session.setShowPair(o => !o);
-                  session.setPairIds([null, null]);
-                }}
+                className={`btn-toggle${measurement.showPair ? ' btn-toggle--active' : ''}`}
+                onClick={measurement.togglePair}
               >
                 Pair
               </button>
             </div>
           </FieldRow>
-          {session.showPair && (
+          {measurement.showPair && (
             <div className="empty-state">
-              {session.pairIds[0] === null
+              {measurement.pairIds[0] === null
                 ? 'Click first object'
-                : session.pairIds[1] === null
+                : measurement.pairIds[1] === null
                 ? 'Click second object'
                 : 'Click any object to re-measure'}
             </div>
@@ -579,31 +502,32 @@ export default function RoomPlanner() {
 
         <RoomCanvas
           layout={session.layout}
-          features={wallFeatures.features}
-          selectedFeatureId={wallFeatures.selectedFeatureId}
+          features={wf.features}
+          selectedFeatureId={wf.selectedFeatureId}
           onFeatureClick={selectFeature}
-          onFeatureUpdate={wallFeatures.update}
+          liveState={drag.liveState}
+          onFeatureMouseDown={drag.startDrag}
           snapGridIn={session.snapEnabled ? session.snapGridIn : undefined}
-          measurementArrows={measurementArrows}
+          measurementArrows={derived.measurementArrows}
         >
-          {furniture.map(f => {
-            const isOdd       = f.rotation === 90 || f.rotation === 270;
-            const isSnappable = session.snapEnabled && f.rotation % 90 === 0;
-            const rndW = toPixels(isOdd ? f.h : f.w);
-            const rndH = toPixels(isOdd ? f.w : f.h);
-            const isSelected = session.selectedId === f.id;
+          {f.furniture.map(item => {
+            const isOdd       = item.rotation === 90 || item.rotation === 270;
+            const isSnappable = session.snapEnabled && item.rotation % 90 === 0;
+            const rndW = toPixels(isOdd ? item.h : item.w);
+            const rndH = toPixels(isOdd ? item.w : item.h);
+            const isSelected = session.selectedId === item.id;
             return (
               <Rnd
-                key={f.id}
+                key={item.id}
                 bounds="parent"
-                position={{ x: toPixels(f.x), y: toPixels(f.y) }}
+                position={{ x: toPixels(item.x), y: toPixels(item.y) }}
                 size={{ width: rndW, height: rndH }}
                 dragGrid={isSnappable ? [session.snapPx, session.snapPx] : undefined}
                 resizeGrid={isSnappable ? [session.snapPx, session.snapPx] : undefined}
-                onMouseDown={() => selectFurniture(f.id)}
-                onDragStop={(_, d) => move(f.id, d.x, d.y)}
+                onMouseDown={() => selectFurniture(item.id)}
+                onDragStop={(_, d) => f.move(item.id, d.x, d.y)}
                 onResizeStop={(_, _dir, ref, _delta, pos) =>
-                  resize(f.id, ref.style.width, ref.style.height, pos.x, pos.y)
+                  f.resize(item.id, ref.style.width, ref.style.height, pos.x, pos.y)
                 }
                 style={{
                   border: isSelected
@@ -616,12 +540,12 @@ export default function RoomPlanner() {
                 <div
                   style={{
                     position: 'absolute',
-                    width: toPixels(f.w),
-                    height: toPixels(f.h),
+                    width: toPixels(item.w),
+                    height: toPixels(item.h),
                     top: '50%',
                     left: '50%',
-                    transform: `translate(-50%, -50%)${f.rotation !== 0 ? ` rotate(${f.rotation}deg)` : ''}`,
-                    background: f.color,
+                    transform: `translate(-50%, -50%)${item.rotation !== 0 ? ` rotate(${item.rotation}deg)` : ''}`,
+                    background: item.color,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -633,7 +557,7 @@ export default function RoomPlanner() {
                   }}
                 >
                   <div style={{ textAlign: 'center' }}>
-                    {f.name}<br />{formatDim(f.w, session.unitSystem)} × {formatDim(f.h, session.unitSystem)}
+                    {item.name}<br />{formatDim(item.w, session.unitSystem)} × {formatDim(item.h, session.unitSystem)}
                   </div>
                 </div>
               </Rnd>

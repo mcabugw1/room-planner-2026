@@ -42,10 +42,6 @@ export function useRoomSession(initialLayout: RoomLayout) {
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [snapGridIn, setSnapGridIn] = useState<SnapSize>(6);
 
-  const [showNeighbors, setShowNeighbors] = useState(false);
-  const [showPair, setShowPair] = useState(false);
-  const [pairIds, setPairIds] = useState<[number | null, number | null]>([null, null]);
-
   const snapPx = toPixels(snapGridIn);
   const widthFt = Math.floor(layout.widthIn / 12);
   const widthInchPart = layout.widthIn - widthFt * 12;
@@ -79,9 +75,6 @@ export function useRoomSession(initialLayout: RoomLayout) {
     snapEnabled, setSnapEnabled,
     snapGridIn, setSnapGridIn,
     snapPx,
-    showNeighbors, setShowNeighbors,
-    showPair, setShowPair,
-    pairIds, setPairIds,
     widthFt, widthInchPart, heightFt, heightInchPart,
     setWidthDims, setHeightDims, applyPreset, applySnapshot,
   };
