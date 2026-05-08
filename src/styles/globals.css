@@ -144,6 +144,12 @@ body {
   gap: var(--s-3);
 }
 
+/* Floor mode: frame must fill canvas-area vertically so viewport gets height */
+.canvas-area--floor .canvas-frame {
+  flex: 1;
+  min-height: 0;
+}
+
 /* 3D / fill-mode: stretch to fill full canvas-area */
 .canvas-frame--fill {
   margin: 0;         /* override the 0 auto from .canvas-frame */
@@ -737,12 +743,6 @@ body {
     width: 100%;
     overflow: hidden;
     align-items: stretch;
-  }
-
-  /* floor mode: canvas-frame must fill to give viewport height */
-  .canvas-area--floor .canvas-frame {
-    flex: 1;
-    min-height: 0;
   }
 
   .canvas-viewport {

@@ -1,3 +1,4 @@
+import React, { Suspense } from 'react';
 import { Rnd } from 'react-rnd';
 import { toPixels } from '../../../utils/canvasCoords';
 import { formatDim } from '../../../utils/displayUtils';
@@ -8,7 +9,7 @@ import { effectiveW, effectiveH } from '../utils/furnitureGeometry';
 import { DEFAULT_ROOM } from '../data/room';
 import RoomCanvas from './RoomCanvas';
 import LayoutsPanel from './LayoutsPanel';
-import Room3DView from './Room3DView';
+const Room3DView = React.lazy(() => import('./Room3DView'));
 import { FurnitureForm } from './FurnitureForm';
 import { WallFeatureForm } from './WallFeatureForm';
 
@@ -445,12 +446,14 @@ export default function RoomPlanner() {
           )}
 
           {ui.viewMode === '3d' && (
-            <Room3DView
-              layout={session.layout}
-              furniture={furniture.furniture}
-              features={wallFeatures.features}
-              unitSystem={session.unitSystem}
-            />
+            <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-gray-400">Loading 3D view…</div>}>
+              <Room3DView
+                layout={session.layout}
+                furniture={furniture.furniture}
+                features={wallFeatures.features}
+                unitSystem={session.unitSystem}
+              />
+            </Suspense>
           )}
         </div>
       </main>
