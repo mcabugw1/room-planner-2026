@@ -3,9 +3,9 @@ import type { RoomFeature, WallSide } from '../types/room';
 import { createId } from '../../../utils/createId';
 
 export type AddableFeature =
-  | { type: 'window';       wall: WallSide; offsetIn: number; lengthIn: number }
-  | { type: 'door-swing';   wall: WallSide; offsetIn: number; swingIn: number; hingeDirection: 'left' | 'right'; swingDirection: 'in' | 'out' }
-  | { type: 'wall-segment'; wall: WallSide; offsetIn: number; lengthIn: number };
+  | { type: 'window';       wall: WallSide; offsetIn: number; lengthIn: number; sillHeightIn?: number; openingHeightIn?: number }
+  | { type: 'door-swing';   wall: WallSide; offsetIn: number; swingIn: number; hingeDirection: 'left' | 'right'; swingDirection: 'in' | 'out'; doorHeightIn?: number }
+  | { type: 'wall-segment'; wall: WallSide; offsetIn: number; lengthIn: number; heightIn?: number };
 
 export type FeatureChanges = {
   wall?: WallSide;
@@ -14,6 +14,10 @@ export type FeatureChanges = {
   swingIn?: number;
   hingeDirection?: 'left' | 'right';
   swingDirection?: 'in' | 'out';
+  sillHeightIn?: number;
+  openingHeightIn?: number;
+  doorHeightIn?: number;
+  heightIn?: number;
 };
 
 export function useWallFeatures(initialFeatures: RoomFeature[]) {
@@ -22,7 +26,14 @@ export function useWallFeatures(initialFeatures: RoomFeature[]) {
 
   function add(feature: AddableFeature) {
     const id = createId();
-    const newFeature = { ...feature, id } as RoomFeature;
+    let newFeature: RoomFeature;
+    if (feature.type === 'window') {
+      newFeature = { ...feature, id, sillHeightIn: feature.sillHeightIn ?? 36, openingHeightIn: feature.openingHeightIn ?? 48 };
+    } else if (feature.type === 'door-swing') {
+      newFeature = { ...feature, id, doorHeightIn: feature.doorHeightIn ?? 80 };
+    } else {
+      newFeature = { ...feature, id, heightIn: feature.heightIn ?? 96 };
+    }
     setFeatures(prev => [...prev, newFeature]);
     setSelectedFeatureId(id);
   }

@@ -2,7 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useRoomSession, PRESETS } from './useRoomSession';
 import type { RoomLayout } from '../types/room';
 
-const INITIAL: RoomLayout = { widthIn: 144, heightIn: 144, features: [] };
+const INITIAL: RoomLayout = { widthIn: 144, heightIn: 144, ceilingHeightIn: 96, features: [] };
 
 describe('useRoomSession', () => {
   describe('setWidthDims', () => {
@@ -75,7 +75,7 @@ describe('useRoomSession', () => {
 
   describe('derived dimensions', () => {
     it('widthFt and widthInchPart split correctly', () => {
-      const { result } = renderHook(() => useRoomSession({ widthIn: 150, heightIn: 120, features: [] }));
+      const { result } = renderHook(() => useRoomSession({ widthIn: 150, heightIn: 120, ceilingHeightIn: 96, features: [] }));
       expect(result.current.widthFt).toBe(12);
       expect(result.current.widthInchPart).toBe(6);
     });

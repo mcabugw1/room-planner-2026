@@ -1,6 +1,11 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, beforeEach } from 'vitest';
-import { useRoomState } from './useRoomState';
+import { useFurniture } from './useFurniture';
+import { useWallFeatures } from './useWallFeatures';
+import { useRoomSession } from './useRoomSession';
+import { useMeasurementMode } from './useMeasurementMode';
+import { useRoomCoordinator } from './useRoomCoordinator';
+import { DEFAULT_ROOM } from '../data/room';
 
 vi.mock('../services/layoutDb', () => ({
   getAutosave:    vi.fn().mockResolvedValue(null),
@@ -16,107 +21,118 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('useRoomState', () => {
+function renderCoordinator() {
+  return renderHook(() => {
+    const furniture = useFurniture();
+    const wallFeatures = useWallFeatures(DEFAULT_ROOM.features);
+    const session = useRoomSession({ ...DEFAULT_ROOM, features: [] });
+    const measurement = useMeasurementMode();
+    const coord = useRoomCoordinator(furniture, wallFeatures, session, measurement);
+    return { furniture, wallFeatures, session, measurement, coord };
+  });
+}
+
+describe('useRoomCoordinator', () => {
   describe('selectFurniture', () => {
     it('sets selectedId in normal mode', async () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       const firstId = result.current.furniture.furniture[0].id;
-      act(() => result.current.selectFurniture(firstId));
+      act(() => result.current.coord.selectFurniture(firstId));
       expect(result.current.session.selectedId).toBe(firstId);
     });
 
     it('clears wall feature selection when furniture is selected', async () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       const firstId = result.current.furniture.furniture[0].id;
       act(() => result.current.wallFeatures.select(result.current.wallFeatures.features[0].id));
-      act(() => result.current.selectFurniture(firstId));
+      act(() => result.current.coord.selectFurniture(firstId));
       expect(result.current.wallFeatures.selectedFeatureId).toBeNull();
     });
 
     it('fills pairIds instead of selecting when showPair is active', async () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       act(() => result.current.measurement.togglePair());
       const firstId = result.current.furniture.furniture[0].id;
-      act(() => result.current.selectFurniture(firstId));
+      act(() => result.current.coord.selectFurniture(firstId));
       expect(result.current.measurement.pairIds[0]).toBe(firstId);
       expect(result.current.session.selectedId).toBeNull();
     });
 
     it('fills both pairIds on two successive selects in pair mode', async () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       act(() => result.current.measurement.togglePair());
       const [a, b] = result.current.furniture.furniture;
-      act(() => result.current.selectFurniture(a.id));
-      act(() => result.current.selectFurniture(b.id));
+      act(() => result.current.coord.selectFurniture(a.id));
+      act(() => result.current.coord.selectFurniture(b.id));
       expect(result.current.measurement.pairIds).toEqual([a.id, b.id]);
     });
   });
 
   describe('selectFeature', () => {
     it('sets selectedFeatureId', () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       const featId = result.current.wallFeatures.features[0].id;
-      act(() => result.current.selectFeature(featId));
+      act(() => result.current.coord.selectFeature(featId));
       expect(result.current.wallFeatures.selectedFeatureId).toBe(featId);
     });
 
     it('clears furniture selection when a feature is selected', () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       const itemId = result.current.furniture.furniture[0].id;
-      act(() => result.current.selectFurniture(itemId));
+      act(() => result.current.coord.selectFurniture(itemId));
       const featId = result.current.wallFeatures.features[0].id;
-      act(() => result.current.selectFeature(featId));
+      act(() => result.current.coord.selectFeature(featId));
       expect(result.current.session.selectedId).toBeNull();
     });
   });
 
   describe('restore', () => {
     it('applies snapshot dimensions to session', () => {
-      const { result } = renderHook(() => useRoomState());
-      act(() => result.current.restore({ widthIn: 200, heightIn: 250, features: [], furniture: [] }));
+      const { result } = renderCoordinator();
+      act(() => result.current.coord.restore({ widthIn: 200, heightIn: 250, ceilingHeightIn: 96, features: [], furniture: [] }));
       expect(result.current.session.layout.widthIn).toBe(200);
       expect(result.current.session.layout.heightIn).toBe(250);
     });
 
     it('resets furniture items from snapshot', () => {
-      const { result } = renderHook(() => useRoomState());
-      const newItem = { id: 99, name: 'Test', w: 30, h: 30, x: 0, y: 0, color: '#fff', rotation: 0 as const };
-      act(() => result.current.restore({ widthIn: 120, heightIn: 120, features: [], furniture: [newItem] }));
+      const { result } = renderCoordinator();
+      const newItem = { id: 99, name: 'Test', w: 30, h: 30, x: 0, y: 0, color: '#fff', rotation: 0 as const, heightIn: 36, zOffsetIn: 0 };
+      act(() => result.current.coord.restore({ widthIn: 120, heightIn: 120, ceilingHeightIn: 96, features: [], furniture: [newItem] }));
       expect(result.current.furniture.furniture).toHaveLength(1);
       expect(result.current.furniture.furniture[0].id).toBe(99);
     });
 
     it('resets wall features from snapshot', () => {
-      const { result } = renderHook(() => useRoomState());
-      act(() => result.current.restore({ widthIn: 120, heightIn: 120, features: [], furniture: [] }));
+      const { result } = renderCoordinator();
+      act(() => result.current.coord.restore({ widthIn: 120, heightIn: 120, ceilingHeightIn: 96, features: [], furniture: [] }));
       expect(result.current.wallFeatures.features).toHaveLength(0);
     });
   });
 
-  describe('derived.selectedItem', () => {
+  describe('selectedItem', () => {
     it('is null when nothing selected', () => {
-      const { result } = renderHook(() => useRoomState());
-      expect(result.current.derived.selectedItem).toBeNull();
+      const { result } = renderCoordinator();
+      expect(result.current.coord.selectedItem).toBeNull();
     });
 
     it('returns the furniture item matching selectedId', () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       const item = result.current.furniture.furniture[0];
-      act(() => result.current.selectFurniture(item.id));
-      expect(result.current.derived.selectedItem?.id).toBe(item.id);
+      act(() => result.current.coord.selectFurniture(item.id));
+      expect(result.current.coord.selectedItem?.id).toBe(item.id);
     });
   });
 
-  describe('derived.measurementArrows', () => {
+  describe('measurementArrows', () => {
     it('is empty when no measurement mode is active', () => {
-      const { result } = renderHook(() => useRoomState());
-      expect(result.current.derived.measurementArrows).toHaveLength(0);
+      const { result } = renderCoordinator();
+      expect(result.current.coord.measurementArrows).toHaveLength(0);
     });
 
     it('produces arrows when showNeighbors is enabled', () => {
-      const { result } = renderHook(() => useRoomState());
+      const { result } = renderCoordinator();
       act(() => result.current.measurement.setShowNeighbors(true));
-      expect(result.current.derived.measurementArrows.length).toBeGreaterThan(0);
+      expect(result.current.coord.measurementArrows.length).toBeGreaterThan(0);
     });
   });
 });

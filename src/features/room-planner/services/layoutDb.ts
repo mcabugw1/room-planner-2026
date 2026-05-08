@@ -1,12 +1,7 @@
-import type { RoomFeature } from '../types/room';
-import type { FurnitureItem } from '../hooks/useFurniture';
+import { migrateSnapshot } from '../data/migrations';
+import type { LayoutSnapshot } from '../data/migrations';
 
-export interface LayoutSnapshot {
-  widthIn: number;
-  heightIn: number;
-  features: RoomFeature[];
-  furniture: FurnitureItem[];
-}
+export type { LayoutSnapshot } from '../data/migrations';
 
 export interface SavedLayout {
   id: number;
@@ -54,11 +49,11 @@ function tx<T>(
 
 export async function getAutosave(): Promise<LayoutSnapshot | null> {
   const db = await openDB();
-  const result = await tx<LayoutSnapshot | undefined>(
+  const result = await tx<unknown>(
     db, AUTOSAVE_STORE, 'readonly',
     t => t.objectStore(AUTOSAVE_STORE).get(AUTOSAVE_KEY),
   );
-  return result ?? null;
+  return result ? migrateSnapshot(result) : null;
 }
 
 export async function saveAutosave(snapshot: LayoutSnapshot): Promise<void> {
@@ -96,7 +91,7 @@ export async function loadLayout(id: number): Promise<LayoutSnapshot | null> {
     db, LAYOUTS_STORE, 'readonly',
     t => t.objectStore(LAYOUTS_STORE).get(id),
   );
-  return result?.data ?? null;
+  return result?.data ? migrateSnapshot(result.data) : null;
 }
 
 export async function renameLayout(id: number, name: string): Promise<void> {

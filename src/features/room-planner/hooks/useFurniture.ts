@@ -1,26 +1,13 @@
 import { useState } from 'react';
 import { toInches } from '../../../utils/coordinates';
 import { createId } from '../../../utils/createId';
+import type { FurnitureItem, RotationDeg } from '../types/room';
+import { defaultFurnitureHeight } from '../utils/furniture';
+import { INITIAL_FURNITURE } from '../data/furniture';
 
-export type RotationDeg = 0 | 90 | 180 | 270;
+export type { FurnitureItem, RotationDeg };
 
 const ROTATION_STEPS: RotationDeg[] = [0, 90, 180, 270];
-
-export interface FurnitureItem {
-  id: number;
-  name: string;
-  w: number;
-  h: number;
-  x: number;
-  y: number;
-  color: string;
-  rotation: RotationDeg;
-}
-
-const INITIAL_FURNITURE: FurnitureItem[] = [
-  { id: 1, name: 'Bed',  w: 54, h: 75, x: 10, y: 10, color: '#ffcccb', rotation: 0 },
-  { id: 2, name: 'Desk', w: 48, h: 24, x: 70, y: 10, color: '#add8e6', rotation: 0 },
-];
 
 export function useFurniture() {
   const [furniture, setFurniture] = useState<FurnitureItem[]>(INITIAL_FURNITURE);
@@ -47,16 +34,18 @@ export function useFurniture() {
     );
   }
 
-  function add() {
+  function add(name = 'New Block') {
     setFurniture(prev => [...prev, {
       id: createId(),
-      name: 'New Block',
+      name,
       w: 24,
       h: 24,
       x: 40,
       y: 40,
       color: '#eee',
       rotation: 0,
+      heightIn: defaultFurnitureHeight(name),
+      zOffsetIn: 0,
     }]);
   }
 

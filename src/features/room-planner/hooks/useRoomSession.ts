@@ -63,9 +63,13 @@ export function useRoomSession(initialLayout: RoomLayout) {
     if (p.w > 0) setLayout(prev => ({ ...prev, widthIn: p.w, heightIn: p.h }));
   }
 
-  function applySnapshot(widthIn: number, heightIn: number) {
-    setLayout(prev => ({ ...prev, widthIn, heightIn }));
+  function applySnapshot(widthIn: number, heightIn: number, ceilingHeightIn = 96) {
+    setLayout(prev => ({ ...prev, widthIn, heightIn, ceilingHeightIn }));
     setSelectedId(null);
+  }
+
+  function setCeilingHeight(in_: number) {
+    if (in_ >= 72 && in_ <= 240) setLayout(prev => ({ ...prev, ceilingHeightIn: in_ }));
   }
 
   return {
@@ -76,6 +80,6 @@ export function useRoomSession(initialLayout: RoomLayout) {
     snapGridIn, setSnapGridIn,
     snapPx,
     widthFt, widthInchPart, heightFt, heightInchPart,
-    setWidthDims, setHeightDims, applyPreset, applySnapshot,
+    setWidthDims, setHeightDims, setCeilingHeight, applyPreset, applySnapshot,
   };
 }

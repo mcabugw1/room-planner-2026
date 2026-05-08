@@ -11,6 +11,7 @@ function door(overrides: Partial<DoorSwingFeature> = {}): DoorSwingFeature {
     swingIn: 36,
     hingeDirection: 'left',
     swingDirection: 'in',
+    doorHeightIn: 80,
     ...overrides,
   };
 }

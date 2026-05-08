@@ -1,6 +1,5 @@
 import { toPixels } from '../../../utils/coordinates';
-import type { FurnitureItem } from '../hooks/useFurniture';
-import type { RoomLayout } from '../types/room';
+import type { FurnitureItem, RoomLayout } from '../types/room';
 
 export interface BoundingBox {
   left: number;
@@ -59,6 +58,30 @@ function makeArrow(
   };
 }
 
+function scanNeighbor(
+  others: BoundingBox[],
+  wallEdge: number,
+  perpOverlap: (ob: BoundingBox) => boolean,
+  isBetter: (scanEdge: number, currentBest: number) => boolean,
+  getEdge: (ob: BoundingBox) => number,
+  overlapMid: (ob: BoundingBox) => number,
+  defaultMid: number,
+): { edge: number; mid: number; isWall: boolean } {
+  let edge = wallEdge;
+  let mid = defaultMid;
+  let isWall = true;
+  for (const ob of others) {
+    if (!perpOverlap(ob)) continue;
+    const e = getEdge(ob);
+    if (isBetter(e, edge)) {
+      edge = e;
+      mid = overlapMid(ob);
+      isWall = false;
+    }
+  }
+  return { edge, mid, isWall };
+}
+
 export function findNearestNeighbors(
   furniture: FurnitureItem[],
   layout: RoomLayout
@@ -67,112 +90,40 @@ export function findNearestNeighbors(
 
   for (const item of furniture) {
     const box = getBoundingBox(item);
-    const others = furniture.filter(f => f.id !== item.id);
+    const obbs = furniture.filter(f => f.id !== item.id).map(getBoundingBox);
 
-    // Left direction: find closest right edge to our left edge
-    {
-      const wallEdge = 0;
-      let closestEdge = wallEdge;
-      let closestMidY = (box.top + box.bottom) / 2;
-      let isWall = true;
+    const horizOverlap = (ob: BoundingBox) => ob.bottom > box.top && ob.top < box.bottom;
+    const vertOverlap  = (ob: BoundingBox) => ob.right > box.left && ob.left < box.right;
+    const horizMid     = (ob: BoundingBox) => Math.max(box.top, ob.top) / 2 + Math.min(box.bottom, ob.bottom) / 2;
+    const vertMid      = (ob: BoundingBox) => Math.max(box.left, ob.left) / 2 + Math.min(box.right, ob.right) / 2;
 
-      for (const other of others) {
-        const ob = getBoundingBox(other);
-        // Must overlap on Y axis
-        if (ob.bottom <= box.top || ob.top >= box.bottom) continue;
-        if (ob.right <= box.left && ob.right > closestEdge) {
-          closestEdge = ob.right;
-          closestMidY = Math.max(box.top, ob.top) / 2 + Math.min(box.bottom, ob.bottom) / 2;
-          isWall = false;
-        }
-      }
+    // Left
+    const L = scanNeighbor(obbs, 0, horizOverlap,
+      (e, best) => e <= box.left && e > best,
+      ob => ob.right, horizMid, (box.top + box.bottom) / 2);
+    const lGap = box.left - L.edge;
+    if (lGap >= 0 || L.isWall) arrows.push(makeArrow(L.edge, L.mid, box.left, L.mid, Math.max(0, lGap)));
 
-      const fromX = box.left;
-      const toX = closestEdge;
-      const midY = isWall ? (box.top + box.bottom) / 2 : closestMidY;
-      const gapIn = fromX - toX;
-      if (gapIn >= 0 || isWall) {
-        arrows.push(makeArrow(toX, midY, fromX, midY, Math.max(0, gapIn)));
-      }
-    }
+    // Right
+    const R = scanNeighbor(obbs, layout.widthIn, horizOverlap,
+      (e, best) => e >= box.right && e < best,
+      ob => ob.left, horizMid, (box.top + box.bottom) / 2);
+    const rGap = R.edge - box.right;
+    if (rGap >= 0 || R.isWall) arrows.push(makeArrow(box.right, R.mid, R.edge, R.mid, Math.max(0, rGap)));
 
-    // Right direction
-    {
-      const wallEdge = layout.widthIn;
-      let closestEdge = wallEdge;
-      let closestMidY = (box.top + box.bottom) / 2;
-      let isWall = true;
+    // Up
+    const U = scanNeighbor(obbs, 0, vertOverlap,
+      (e, best) => e <= box.top && e > best,
+      ob => ob.bottom, vertMid, (box.left + box.right) / 2);
+    const uGap = box.top - U.edge;
+    if (uGap >= 0 || U.isWall) arrows.push(makeArrow(U.mid, U.edge, U.mid, box.top, Math.max(0, uGap)));
 
-      for (const other of others) {
-        const ob = getBoundingBox(other);
-        if (ob.bottom <= box.top || ob.top >= box.bottom) continue;
-        if (ob.left >= box.right && ob.left < closestEdge) {
-          closestEdge = ob.left;
-          closestMidY = Math.max(box.top, ob.top) / 2 + Math.min(box.bottom, ob.bottom) / 2;
-          isWall = false;
-        }
-      }
-
-      const fromX = box.right;
-      const toX = closestEdge;
-      const midY = isWall ? (box.top + box.bottom) / 2 : closestMidY;
-      const gapIn = toX - fromX;
-      if (gapIn >= 0 || isWall) {
-        arrows.push(makeArrow(fromX, midY, toX, midY, Math.max(0, gapIn)));
-      }
-    }
-
-    // Up direction
-    {
-      const wallEdge = 0;
-      let closestEdge = wallEdge;
-      let closestMidX = (box.left + box.right) / 2;
-      let isWall = true;
-
-      for (const other of others) {
-        const ob = getBoundingBox(other);
-        if (ob.right <= box.left || ob.left >= box.right) continue;
-        if (ob.bottom <= box.top && ob.bottom > closestEdge) {
-          closestEdge = ob.bottom;
-          closestMidX = Math.max(box.left, ob.left) / 2 + Math.min(box.right, ob.right) / 2;
-          isWall = false;
-        }
-      }
-
-      const fromY = box.top;
-      const toY = closestEdge;
-      const midX = isWall ? (box.left + box.right) / 2 : closestMidX;
-      const gapIn = fromY - toY;
-      if (gapIn >= 0 || isWall) {
-        arrows.push(makeArrow(midX, toY, midX, fromY, Math.max(0, gapIn)));
-      }
-    }
-
-    // Down direction
-    {
-      const wallEdge = layout.heightIn;
-      let closestEdge = wallEdge;
-      let closestMidX = (box.left + box.right) / 2;
-      let isWall = true;
-
-      for (const other of others) {
-        const ob = getBoundingBox(other);
-        if (ob.right <= box.left || ob.left >= box.right) continue;
-        if (ob.top >= box.bottom && ob.top < closestEdge) {
-          closestEdge = ob.top;
-          closestMidX = Math.max(box.left, ob.left) / 2 + Math.min(box.right, ob.right) / 2;
-          isWall = false;
-        }
-      }
-
-      const fromY = box.bottom;
-      const toY = closestEdge;
-      const midX = isWall ? (box.left + box.right) / 2 : closestMidX;
-      const gapIn = toY - fromY;
-      if (gapIn >= 0 || isWall) {
-        arrows.push(makeArrow(midX, fromY, midX, toY, Math.max(0, gapIn)));
-      }
-    }
+    // Down
+    const D = scanNeighbor(obbs, layout.heightIn, vertOverlap,
+      (e, best) => e >= box.bottom && e < best,
+      ob => ob.top, vertMid, (box.left + box.right) / 2);
+    const dGap = D.edge - box.bottom;
+    if (dGap >= 0 || D.isWall) arrows.push(makeArrow(D.mid, box.bottom, D.mid, D.edge, Math.max(0, dGap)));
   }
 
   return deduplicateArrows(arrows);
@@ -201,7 +152,6 @@ export function measureTwoObjects(a: FurnitureItem, b: FurnitureItem): Measureme
   const ba = getBoundingBox(a);
   const bb = getBoundingBox(b);
 
-  // Closest point on A to center of B, and vice versa
   const cpAx = clamp((bb.left + bb.right) / 2, ba.left, ba.right);
   const cpAy = clamp((bb.top + bb.bottom) / 2, ba.top, ba.bottom);
   const cpBx = clamp((ba.left + ba.right) / 2, bb.left, bb.right);
@@ -213,9 +163,7 @@ export function measureTwoObjects(a: FurnitureItem, b: FurnitureItem): Measureme
 
   const isOverlap = gapIn <= 0;
 
-  // Pick arrow endpoints on the facing edges
   let fromX: number, fromY: number, toX: number, toY: number;
-
   if (isOverlap) {
     fromX = (ba.left + ba.right) / 2;
     fromY = (ba.top + ba.bottom) / 2;

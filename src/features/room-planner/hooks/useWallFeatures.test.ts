@@ -3,9 +3,9 @@ import { useWallFeatures } from './useWallFeatures';
 import type { RoomFeature } from '../types/room';
 
 const INITIAL: RoomFeature[] = [
-  { type: 'window',       id: 1, wall: 'left',   offsetIn: 30, lengthIn: 60 },
-  { type: 'door-swing',   id: 2, wall: 'right',  offsetIn: 50, swingIn: 36, hingeDirection: 'right', swingDirection: 'in' },
-  { type: 'wall-segment', id: 3, wall: 'bottom',  offsetIn: 10, lengthIn: 20 },
+  { type: 'window',       id: 1, wall: 'left',   offsetIn: 30, lengthIn: 60,  sillHeightIn: 36, openingHeightIn: 48 },
+  { type: 'door-swing',   id: 2, wall: 'right',  offsetIn: 50, swingIn: 36,   hingeDirection: 'right', swingDirection: 'in', doorHeightIn: 80 },
+  { type: 'wall-segment', id: 3, wall: 'bottom',  offsetIn: 10, lengthIn: 20,  heightIn: 96 },
 ];
 
 describe('useWallFeatures', () => {

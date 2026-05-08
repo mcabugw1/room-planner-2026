@@ -2,7 +2,7 @@ import { computeMoveOffset, computeResizeEnd, computeResizeStart, featureLenIn }
 import type { RoomFeature } from '../types/room';
 
 function window_(id: number, offset: number, len: number): RoomFeature {
-  return { type: 'window', id, wall: 'bottom', offsetIn: offset, lengthIn: len };
+  return { type: 'window', id, wall: 'bottom', offsetIn: offset, lengthIn: len, sillHeightIn: 36, openingHeightIn: 48 };
 }
 
 describe('featureLenIn', () => {
@@ -11,7 +11,7 @@ describe('featureLenIn', () => {
   });
 
   it('returns swingIn for door-swing', () => {
-    const door: RoomFeature = { type: 'door-swing', id: 1, wall: 'bottom', offsetIn: 0, swingIn: 32, hingeDirection: 'left', swingDirection: 'in' };
+    const door: RoomFeature = { type: 'door-swing', id: 1, wall: 'bottom', offsetIn: 0, swingIn: 32, hingeDirection: 'left', swingDirection: 'in', doorHeightIn: 80 };
     expect(featureLenIn(door)).toBe(32);
   });
 });

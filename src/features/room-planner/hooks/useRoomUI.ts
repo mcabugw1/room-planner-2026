@@ -11,6 +11,7 @@ export function useRoomUI() {
   const [measureOpen,  setMeasureOpen]  = useState(false);
   const [legendOpen,   setLegendOpen]   = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'floor' | '3d'>('floor');
 
   const [newFeatType,     setNewFeatType]     = useState<'window' | 'door-swing' | 'wall-segment'>('window');
   const [newFeatWall,     setNewFeatWall]     = useState<WallSide>('bottom');
@@ -45,6 +46,7 @@ export function useRoomUI() {
     measureOpen,  toggleMeasure:  () => setMeasureOpen(o => !o),
     legendOpen,   toggleLegend:   () => setLegendOpen(o => !o),
     mobileSidebarOpen, setMobileSidebarOpen,
+    viewMode, setViewMode,
     newFeatType, setNewFeatType,
     newFeatWall, setNewFeatWall,
     newFeatOffset, setNewFeatOffset,
