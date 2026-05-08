@@ -144,10 +144,12 @@ body {
   gap: var(--s-3);
 }
 
-/* Floor mode: frame must fill canvas-area vertically so viewport gets height */
+/* Floor mode: frame must fill canvas-area fully so viewport gets correct dimensions */
 .canvas-area--floor .canvas-frame {
   flex: 1;
   min-height: 0;
+  align-self: stretch;
+  margin: 0;
 }
 
 /* 3D / fill-mode: stretch to fill full canvas-area */

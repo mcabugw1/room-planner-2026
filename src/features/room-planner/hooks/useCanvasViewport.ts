@@ -15,6 +15,8 @@ export function useCanvasViewport(canvasW: number, canvasH: number) {
   const fitted = useRef(false);
   const canvasWRef = useRef(canvasW);
   const canvasHRef = useRef(canvasH);
+  const prevCanvasW = useRef(canvasW);
+  const prevCanvasH = useRef(canvasH);
   canvasWRef.current = canvasW;
   canvasHRef.current = canvasH;
 
@@ -29,11 +31,17 @@ export function useCanvasViewport(canvasW: number, canvasH: number) {
   }
 
   useLayoutEffect(() => {
-    if (fitted.current) return;
     const el = containerRef.current;
     if (!el) return;
-    fit(el);
-    fitted.current = true;
+    const dimensionsChanged =
+      canvasWRef.current !== prevCanvasW.current ||
+      canvasHRef.current !== prevCanvasH.current;
+    prevCanvasW.current = canvasWRef.current;
+    prevCanvasH.current = canvasHRef.current;
+    if (!fitted.current || dimensionsChanged) {
+      fit(el);
+      fitted.current = true;
+    }
   });
 
   function refit() {
