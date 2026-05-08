@@ -3,6 +3,7 @@ import { toPixels } from '../../../utils/canvasCoords';
 import { formatDim } from '../../../utils/displayUtils';
 import { useRoomCoordinator } from '../hooks/useRoomCoordinator';
 import { PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
+import { useDimInput } from '../hooks/useDimInput';
 import { effectiveW, effectiveH } from '../utils/furnitureGeometry';
 import { DEFAULT_ROOM } from '../data/room';
 import RoomCanvas from './RoomCanvas';
@@ -60,6 +61,9 @@ export default function RoomPlanner() {
   } = useRoomCoordinator(DEFAULT_ROOM);
 
   const isFloor = ui.viewMode === 'floor';
+
+  const widthDim = useDimInput(session.widthFt, session.widthInchPart, session.setWidthDims);
+  const heightDim = useDimInput(session.heightFt, session.heightInchPart, session.setHeightDims);
 
   return (
     <div className="planner">
@@ -134,8 +138,7 @@ export default function RoomPlanner() {
                     className="input input--short"
                     min={0} max={60}
                     autoComplete="off"
-                    value={session.widthFt}
-                    onChange={e => session.setWidthDims(Number(e.target.value), session.widthInchPart)}
+                    {...widthDim.ftProps}
                   />
                   <span className="dim-unit">ft</span>
                   <input
@@ -144,8 +147,7 @@ export default function RoomPlanner() {
                     className="input input--short"
                     min={0} step={0.5}
                     autoComplete="off"
-                    value={session.widthInchPart}
-                    onChange={e => session.setWidthDims(session.widthFt, Number(e.target.value))}
+                    {...widthDim.inProps}
                   />
                   <span className="dim-unit">in</span>
                 </div>
@@ -158,8 +160,7 @@ export default function RoomPlanner() {
                     className="input input--short"
                     min={0} max={60}
                     autoComplete="off"
-                    value={session.heightFt}
-                    onChange={e => session.setHeightDims(Number(e.target.value), session.heightInchPart)}
+                    {...heightDim.ftProps}
                   />
                   <span className="dim-unit">ft</span>
                   <input
@@ -168,8 +169,7 @@ export default function RoomPlanner() {
                     className="input input--short"
                     min={0} step={0.5}
                     autoComplete="off"
-                    value={session.heightInchPart}
-                    onChange={e => session.setHeightDims(session.heightFt, Number(e.target.value))}
+                    {...heightDim.inProps}
                   />
                   <span className="dim-unit">in</span>
                 </div>
