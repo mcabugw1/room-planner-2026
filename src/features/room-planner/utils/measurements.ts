@@ -1,4 +1,5 @@
-import { toPixels } from '../../../utils/coordinates';
+import { toPixels } from '../../../utils/canvasCoords';
+import { effectiveW, effectiveH } from './furnitureGeometry';
 import type { FurnitureItem, RoomLayout } from '../types/room';
 
 export interface BoundingBox {
@@ -21,14 +22,11 @@ export interface MeasurementArrow {
 }
 
 export function getBoundingBox(item: FurnitureItem): BoundingBox {
-  const isOdd = item.rotation === 90 || item.rotation === 270;
-  const w = isOdd ? item.h : item.w;
-  const h = isOdd ? item.w : item.h;
   return {
     left: item.x,
-    right: item.x + w,
+    right: item.x + effectiveW(item),
     top: item.y,
-    bottom: item.y + h,
+    bottom: item.y + effectiveH(item),
   };
 }
 

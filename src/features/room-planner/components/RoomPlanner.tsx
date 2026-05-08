@@ -1,13 +1,9 @@
 import { Rnd } from 'react-rnd';
-import { toPixels, formatDim } from '../../../utils/coordinates';
-import { useFurniture } from '../hooks/useFurniture';
-import { useWallFeatures } from '../hooks/useWallFeatures';
-import { useRoomSession, PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
-import { useRoomUI } from '../hooks/useRoomUI';
-import { useMeasurementMode } from '../hooks/useMeasurementMode';
-import { useLayoutPersistence } from '../hooks/useLayoutPersistence';
-import { useWallFeatureDrag } from '../hooks/useWallFeatureDrag';
+import { toPixels } from '../../../utils/canvasCoords';
+import { formatDim } from '../../../utils/displayUtils';
 import { useRoomCoordinator } from '../hooks/useRoomCoordinator';
+import { PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
+import { effectiveW, effectiveH } from '../utils/furnitureGeometry';
 import { DEFAULT_ROOM } from '../data/room';
 import RoomCanvas from './RoomCanvas';
 import LayoutsPanel from './LayoutsPanel';
@@ -56,14 +52,12 @@ function FieldRow({ label, children }: { label?: string; children: React.ReactNo
 }
 
 export default function RoomPlanner() {
-  const furniture   = useFurniture();
-  const wallFeatures = useWallFeatures(DEFAULT_ROOM.features);
-  const session     = useRoomSession({ ...DEFAULT_ROOM, features: [] });
-  const ui          = useRoomUI();
-  const measurement = useMeasurementMode();
-  const coord       = useRoomCoordinator(furniture, wallFeatures, session, measurement);
-  const persistence = useLayoutPersistence(coord.snapshot, coord.restore);
-  const drag        = useWallFeatureDrag(session.layout, wallFeatures.features, coord.selectFeature, wallFeatures.update);
+  const {
+    session, furniture, wallFeatures, measurement, persistence,
+    ui, featDraft, drag, viewport,
+    selectedItem, selectedFeature, measurementArrows,
+    selectFeature, selectFurniture, restore,
+  } = useRoomCoordinator(DEFAULT_ROOM);
 
   const isFloor = ui.viewMode === 'floor';
 
@@ -109,7 +103,7 @@ export default function RoomPlanner() {
             onSave={name => persistence.saveNamed(name)}
             onLoad={async id => {
               const s = await persistence.loadNamed(id);
-              if (s) coord.restore(s);
+              if (s) restore(s);
             }}
             onRename={(id, name) => persistence.renameSaved(id, name)}
             onDelete={id => persistence.deleteSaved(id)}
@@ -136,16 +130,20 @@ export default function RoomPlanner() {
                 <div className="ft-in-input-group">
                   <input
                     type="number"
+                    inputMode="numeric"
                     className="input input--short"
                     min={0} max={60}
+                    autoComplete="off"
                     value={session.widthFt}
                     onChange={e => session.setWidthDims(Number(e.target.value), session.widthInchPart)}
                   />
                   <span className="dim-unit">ft</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     className="input input--short"
                     min={0} step={0.5}
+                    autoComplete="off"
                     value={session.widthInchPart}
                     onChange={e => session.setWidthDims(session.widthFt, Number(e.target.value))}
                   />
@@ -156,16 +154,20 @@ export default function RoomPlanner() {
                 <div className="ft-in-input-group">
                   <input
                     type="number"
+                    inputMode="numeric"
                     className="input input--short"
                     min={0} max={60}
+                    autoComplete="off"
                     value={session.heightFt}
                     onChange={e => session.setHeightDims(Number(e.target.value), session.heightInchPart)}
                   />
                   <span className="dim-unit">ft</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     className="input input--short"
                     min={0} step={0.5}
+                    autoComplete="off"
                     value={session.heightInchPart}
                     onChange={e => session.setHeightDims(session.heightFt, Number(e.target.value))}
                   />
@@ -178,8 +180,10 @@ export default function RoomPlanner() {
               <FieldRow label="Width (in)">
                 <input
                   type="number"
+                  inputMode="decimal"
                   className="input"
                   min={48} max={720} step={0.5}
+                  autoComplete="off"
                   value={session.layout.widthIn}
                   onChange={e => {
                     const v = Number(e.target.value);
@@ -190,8 +194,10 @@ export default function RoomPlanner() {
               <FieldRow label="Depth (in)">
                 <input
                   type="number"
+                  inputMode="decimal"
                   className="input"
                   min={48} max={720} step={0.5}
+                  autoComplete="off"
                   value={session.layout.heightIn}
                   onChange={e => {
                     const v = Number(e.target.value);
@@ -204,8 +210,10 @@ export default function RoomPlanner() {
           <FieldRow label="Ceiling height (in)">
             <input
               type="number"
+              inputMode="numeric"
               className="input"
               min={72} max={240} step={1}
+              autoComplete="off"
               value={session.layout.ceilingHeightIn}
               onChange={e => session.setCeilingHeight(Number(e.target.value))}
             />
@@ -247,12 +255,13 @@ export default function RoomPlanner() {
             + Add Furniture
           </button>
           <FurnitureForm
-            selectedItem={coord.selectedItem}
+            selectedItem={selectedItem}
             roomWidthIn={session.layout.widthIn}
             roomHeightIn={session.layout.heightIn}
             unitSystem={session.unitSystem}
             furnitureCount={furniture.furniture.length}
             onUpdate={furniture.update}
+            onRotate={furniture.rotate}
             onRemove={id => { furniture.remove(id); session.setSelectedId(null); }}
           />
         </SectionPanel>
@@ -260,27 +269,17 @@ export default function RoomPlanner() {
         {/* Wall Features */}
         <SectionPanel title="Walls" open={ui.wallFeatOpen} onToggle={ui.toggleWallFeat}>
           <WallFeatureForm
-            newFeatType={ui.newFeatType}
-            newFeatWall={ui.newFeatWall}
-            newFeatOffset={ui.newFeatOffset}
-            newFeatLength={ui.newFeatLength}
-            newFeatHinge={ui.newFeatHinge}
-            newFeatSwingDir={ui.newFeatSwingDir}
-            onSetFeatType={ui.setNewFeatType}
-            onSetFeatWall={ui.setNewFeatWall}
-            onSetFeatOffset={ui.setNewFeatOffset}
-            onSetFeatLength={ui.setNewFeatLength}
-            onSetFeatHinge={ui.setNewFeatHinge}
-            onSetFeatSwingDir={ui.setNewFeatSwingDir}
-            buildFeature={ui.buildFeature}
+            draft={featDraft.draft}
+            onDraftChange={changes => featDraft.setDraft(d => ({ ...d, ...changes }))}
+            buildFeature={featDraft.buildFeature}
             features={wallFeatures.features}
-            selectedFeature={coord.selectedFeature}
+            selectedFeature={selectedFeature}
             selectedFeatureId={wallFeatures.selectedFeatureId}
             unitSystem={session.unitSystem}
             onAdd={wallFeatures.add}
             onRemove={wallFeatures.remove}
             onUpdate={wallFeatures.update}
-            onSelect={coord.selectFeature}
+            onSelect={selectFeature}
           />
         </SectionPanel>
 
@@ -360,32 +359,40 @@ export default function RoomPlanner() {
                 )}
               </p>
 
-              <RoomCanvas
-                layout={session.layout}
-                features={wallFeatures.features}
-                selectedFeatureId={wallFeatures.selectedFeatureId}
-                onFeatureClick={coord.selectFeature}
-                liveState={drag.liveState}
-                onFeatureMouseDown={drag.startDrag}
-                snapGridIn={session.snapEnabled ? session.snapGridIn : undefined}
-                measurementArrows={coord.measurementArrows}
+              <div
+                ref={viewport.containerRef}
+                className="canvas-viewport"
               >
+                <div
+                  className="canvas-viewport-inner"
+                  style={{ transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`, transformOrigin: '0 0' }}
+                >
+                <RoomCanvas
+                  layout={session.layout}
+                  features={wallFeatures.features}
+                  selectedFeatureId={wallFeatures.selectedFeatureId}
+                  onFeatureClick={selectFeature}
+                  liveState={drag.liveState}
+                  onFeaturePointerDown={drag.startDrag}
+                  snapGridIn={session.snapEnabled ? session.snapGridIn : undefined}
+                  measurementArrows={measurementArrows}
+                >
                 {furniture.furniture.map(item => {
-                  const isOdd       = item.rotation === 90 || item.rotation === 270;
                   const isSnappable = session.snapEnabled && item.rotation % 90 === 0;
-                  const rndW = toPixels(isOdd ? item.h : item.w);
-                  const rndH = toPixels(isOdd ? item.w : item.h);
+                  const rndW = toPixels(effectiveW(item));
+                  const rndH = toPixels(effectiveH(item));
                   const isSelected = session.selectedId === item.id;
                   const clipsThrough = item.heightIn + item.zOffsetIn > session.layout.ceilingHeightIn;
                   return (
                     <Rnd
                       key={item.id}
                       bounds="parent"
+                      scale={viewport.scale}
                       position={{ x: toPixels(item.x), y: toPixels(item.y) }}
                       size={{ width: rndW, height: rndH }}
                       dragGrid={isSnappable ? [session.snapPx, session.snapPx] : undefined}
                       resizeGrid={isSnappable ? [session.snapPx, session.snapPx] : undefined}
-                      onMouseDown={() => coord.selectFurniture(item.id)}
+                      onPointerDown={() => selectFurniture(item.id)}
                       onDragStop={(_, d) => furniture.move(item.id, d.x, d.y)}
                       onResizeStop={(_, _dir, ref, _delta, pos) =>
                         furniture.resize(item.id, ref.style.width, ref.style.height, pos.x, pos.y)
@@ -427,6 +434,13 @@ export default function RoomPlanner() {
                   );
                 })}
               </RoomCanvas>
+                </div>
+                <div className="canvas-zoom-controls">
+                  <button className="canvas-zoom-btn" onClick={viewport.zoomIn} aria-label="Zoom in">+</button>
+                  <button className="canvas-zoom-btn" onClick={viewport.zoomOut} aria-label="Zoom out">−</button>
+                  <button className="canvas-zoom-btn" onClick={viewport.refit} aria-label="Fit to screen">⤢</button>
+                </div>
+              </div>
             </>
           )}
 
@@ -440,6 +454,25 @@ export default function RoomPlanner() {
           )}
         </div>
       </main>
+
+      {isFloor && session.selectedId !== null && (
+        <div className="selection-actions">
+          <button
+            className="selection-action-btn"
+            onClick={() => furniture.rotate(session.selectedId!)}
+            aria-label="Rotate 90°"
+          >
+            ↺ Rotate
+          </button>
+          <button
+            className="selection-action-btn selection-action-btn--danger"
+            onClick={() => { furniture.remove(session.selectedId!); session.setSelectedId(null); }}
+            aria-label="Delete selected"
+          >
+            Delete
+          </button>
+        </div>
+      )}
 
       {isFloor && (
         <button

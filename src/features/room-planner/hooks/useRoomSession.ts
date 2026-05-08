@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { toPixels } from '../../../utils/coordinates';
-import type { UnitSystem } from '../../../utils/coordinates';
+import { toPixels } from '../../../utils/canvasCoords';
+import type { UnitSystem } from '../../../utils/displayUtils';
 import type { RoomLayout } from '../types/room';
 
 export const PRESETS: { label: string; w: number; h: number }[] = [

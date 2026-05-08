@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { toInches } from '../../../utils/coordinates';
+import { toInches } from '../../../utils/canvasCoords';
 import { createId } from '../../../utils/createId';
+import { isOddRotation } from '../utils/furnitureGeometry';
 import type { FurnitureItem, RotationDeg } from '../types/room';
 import { defaultFurnitureHeight } from '../utils/furniture';
 import { INITIAL_FURNITURE } from '../data/furniture';
@@ -22,11 +23,11 @@ export function useFurniture() {
     setFurniture(prev =>
       prev.map(f => {
         if (f.id !== id) return f;
-        const isOdd = f.rotation === 90 || f.rotation === 270;
+        const swapped = isOddRotation(f);
         return {
           ...f,
-          w: toInches(parseInt(isOdd ? pHeight : pWidth)),
-          h: toInches(parseInt(isOdd ? pWidth : pHeight)),
+          w: toInches(parseInt(swapped ? pHeight : pWidth)),
+          h: toInches(parseInt(swapped ? pWidth : pHeight)),
           x: toInches(px),
           y: toInches(py),
         };

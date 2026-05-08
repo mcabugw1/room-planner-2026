@@ -1,5 +1,5 @@
 import type { FurnitureItem } from '../types/room';
-import type { UnitSystem } from '../../../utils/coordinates';
+import type { UnitSystem } from '../../../utils/displayUtils';
 
 interface FieldRowProps { label?: string; children: React.ReactNode }
 function FieldRow({ label, children }: FieldRowProps) {
@@ -19,6 +19,7 @@ interface FurnitureFormProps {
   furnitureCount: number;
   onUpdate: (id: number, changes: Partial<Omit<FurnitureItem, 'id'>>) => void;
   onRemove: (id: number) => void;
+  onRotate: (id: number) => void;
 }
 
 export function FurnitureForm({
@@ -29,6 +30,7 @@ export function FurnitureForm({
   furnitureCount,
   onUpdate,
   onRemove,
+  onRotate,
 }: FurnitureFormProps) {
   if (!selectedItem) {
     return (
@@ -48,6 +50,7 @@ export function FurnitureForm({
           type="text"
           className="input"
           maxLength={50}
+          autoComplete="off"
           value={selectedItem.name}
           onChange={e => onUpdate(selectedItem.id, { name: e.target.value })}
         />
@@ -56,8 +59,10 @@ export function FurnitureForm({
         <FieldRow label="Width (in)">
           <input
             type="number"
+            inputMode="decimal"
             className="input"
             min={6} max={roomWidthIn} step={0.5}
+            autoComplete="off"
             value={selectedItem.w}
             onChange={e => onUpdate(selectedItem.id, { w: Number(e.target.value) })}
           />
@@ -65,8 +70,10 @@ export function FurnitureForm({
         <FieldRow label="Depth (in)">
           <input
             type="number"
+            inputMode="decimal"
             className="input"
             min={6} max={roomHeightIn} step={0.5}
+            autoComplete="off"
             value={selectedItem.h}
             onChange={e => onUpdate(selectedItem.id, { h: Number(e.target.value) })}
           />
@@ -76,8 +83,10 @@ export function FurnitureForm({
         <FieldRow label="Height (in)">
           <input
             type="number"
+            inputMode="decimal"
             className="input"
             min={1} max={240} step={0.5}
+            autoComplete="off"
             value={selectedItem.heightIn}
             onChange={e => onUpdate(selectedItem.id, { heightIn: Number(e.target.value) })}
           />
@@ -85,8 +94,10 @@ export function FurnitureForm({
         <FieldRow label="Floor offset (in)">
           <input
             type="number"
+            inputMode="decimal"
             className="input"
             min={0} max={120} step={0.5}
+            autoComplete="off"
             value={selectedItem.zOffsetIn}
             onChange={e => onUpdate(selectedItem.id, { zOffsetIn: Number(e.target.value) })}
           />
@@ -101,9 +112,16 @@ export function FurnitureForm({
         />
       </FieldRow>
       <FieldRow label="Rotation">
-        <div className="rotation-display">
-          {selectedItem.rotation}°
-          <span className="rotation-hint">(R to rotate)</span>
+        <div className="rotation-row">
+          <span className="rotation-value">{selectedItem.rotation}°</span>
+          <button
+            className="btn-rotate"
+            onClick={() => onRotate(selectedItem.id)}
+            aria-label="Rotate 90°"
+          >
+            ↺ Rotate
+          </button>
+          <span className="rotation-hint">(R)</span>
         </div>
       </FieldRow>
       <button

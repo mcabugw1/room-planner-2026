@@ -1,5 +1,5 @@
 import { getDoorSwingStyle } from './wallFeatureStyles';
-import { toPixels } from '../../../utils/coordinates';
+import { toPixels } from '../../../utils/canvasCoords';
 import type { DoorSwingFeature } from '../types/room';
 
 function door(overrides: Partial<DoorSwingFeature> = {}): DoorSwingFeature {

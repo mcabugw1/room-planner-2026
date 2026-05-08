@@ -1,7 +1,8 @@
-import { formatDim } from '../../../utils/coordinates';
-import type { UnitSystem } from '../../../utils/coordinates';
+import { formatDim } from '../../../utils/displayUtils';
+import type { UnitSystem } from '../../../utils/displayUtils';
 import type { RoomFeature, WallSide, WindowFeature, DoorSwingFeature } from '../types/room';
 import type { AddableFeature, FeatureChanges } from '../hooks/useWallFeatures';
+import type { FeatureDraft } from '../hooks/useNewFeatureDraft';
 
 const WALL_LABELS: Record<WallSide, string> = {
   top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left',
@@ -26,18 +27,8 @@ function featureLabel(feat: RoomFeature, unitSystem: UnitSystem): string {
 }
 
 interface WallFeatureFormProps {
-  newFeatType: 'window' | 'door-swing' | 'wall-segment';
-  newFeatWall: WallSide;
-  newFeatOffset: number;
-  newFeatLength: number;
-  newFeatHinge: 'left' | 'right';
-  newFeatSwingDir: 'in' | 'out';
-  onSetFeatType: (v: 'window' | 'door-swing' | 'wall-segment') => void;
-  onSetFeatWall: (v: WallSide) => void;
-  onSetFeatOffset: (v: number) => void;
-  onSetFeatLength: (v: number) => void;
-  onSetFeatHinge: (v: 'left' | 'right') => void;
-  onSetFeatSwingDir: (v: 'in' | 'out') => void;
+  draft: FeatureDraft;
+  onDraftChange: (changes: Partial<FeatureDraft>) => void;
   buildFeature: () => AddableFeature;
   features: RoomFeature[];
   selectedFeature: RoomFeature | null;
@@ -50,18 +41,8 @@ interface WallFeatureFormProps {
 }
 
 export function WallFeatureForm({
-  newFeatType,
-  newFeatWall,
-  newFeatOffset,
-  newFeatLength,
-  newFeatHinge,
-  newFeatSwingDir,
-  onSetFeatType,
-  onSetFeatWall,
-  onSetFeatOffset,
-  onSetFeatLength,
-  onSetFeatHinge,
-  onSetFeatSwingDir,
+  draft,
+  onDraftChange,
   buildFeature,
   features,
   selectedFeature,
@@ -77,8 +58,8 @@ export function WallFeatureForm({
       <FieldRow label="Type">
         <select
           className="input"
-          value={newFeatType}
-          onChange={e => onSetFeatType(e.target.value as 'window' | 'door-swing' | 'wall-segment')}
+          value={draft.type}
+          onChange={e => onDraftChange({ type: e.target.value as FeatureDraft['type'] })}
         >
           <option value="window">Window</option>
           <option value="door-swing">Door</option>
@@ -88,8 +69,8 @@ export function WallFeatureForm({
       <FieldRow label="Wall">
         <select
           className="input"
-          value={newFeatWall}
-          onChange={e => onSetFeatWall(e.target.value as WallSide)}
+          value={draft.wall}
+          onChange={e => onDraftChange({ wall: e.target.value as WallSide })}
         >
           {(['top', 'right', 'bottom', 'left'] as WallSide[]).map(w => (
             <option key={w} value={w}>{WALL_LABELS[w]}</option>
@@ -99,30 +80,34 @@ export function WallFeatureForm({
       <FieldRow label="Offset from corner (in)">
         <input
           type="number"
+          inputMode="decimal"
           className="input"
           min={0} step={0.5}
-          value={newFeatOffset}
-          onChange={e => onSetFeatOffset(Number(e.target.value))}
+          autoComplete="off"
+          value={draft.offsetIn}
+          onChange={e => onDraftChange({ offsetIn: Number(e.target.value) })}
         />
       </FieldRow>
-      <FieldRow label={newFeatType === 'door-swing' ? 'Swing radius (in)' : 'Width (in)'}>
+      <FieldRow label={draft.type === 'door-swing' ? 'Swing radius (in)' : 'Width (in)'}>
         <input
           type="number"
+          inputMode="decimal"
           className="input"
           min={6} step={0.5}
-          value={newFeatLength}
-          onChange={e => onSetFeatLength(Number(e.target.value))}
+          autoComplete="off"
+          value={draft.lengthIn}
+          onChange={e => onDraftChange({ lengthIn: Number(e.target.value) })}
         />
       </FieldRow>
-      {newFeatType === 'door-swing' && (
+      {draft.type === 'door-swing' && (
         <>
           <FieldRow label="Hinge side">
             <div className="btn-toggle-group">
               {(['left', 'right'] as const).map(side => (
                 <button
                   key={side}
-                  onClick={() => onSetFeatHinge(side)}
-                  className={`btn-toggle${newFeatHinge === side ? ' btn-toggle--active' : ''}`}
+                  onClick={() => onDraftChange({ hinge: side })}
+                  className={`btn-toggle${draft.hinge === side ? ' btn-toggle--active' : ''}`}
                 >
                   {side.charAt(0).toUpperCase() + side.slice(1)}
                 </button>
@@ -134,8 +119,8 @@ export function WallFeatureForm({
               {(['in', 'out'] as const).map(dir => (
                 <button
                   key={dir}
-                  onClick={() => onSetFeatSwingDir(dir)}
-                  className={`btn-toggle${newFeatSwingDir === dir ? ' btn-toggle--active' : ''}`}
+                  onClick={() => onDraftChange({ swingDir: dir })}
+                  className={`btn-toggle${draft.swingDir === dir ? ' btn-toggle--active' : ''}`}
                 >
                   {dir === 'in' ? 'Into room' : 'Out of room'}
                 </button>
@@ -178,8 +163,10 @@ export function WallFeatureForm({
               <FieldRow label="Offset from corner (in)">
                 <input
                   type="number"
+                  inputMode="decimal"
                   className="input"
                   min={0} step={0.5}
+                  autoComplete="off"
                   value={selectedFeature.offsetIn}
                   onChange={e => onUpdate(selectedFeature.id, { offsetIn: Number(e.target.value) })}
                 />
@@ -188,8 +175,10 @@ export function WallFeatureForm({
                 <FieldRow label="Width (in)">
                   <input
                     type="number"
+                    inputMode="decimal"
                     className="input"
                     min={6} step={0.5}
+                    autoComplete="off"
                     value={selectedFeature.lengthIn}
                     onChange={e => onUpdate(selectedFeature.id, { lengthIn: Number(e.target.value) })}
                   />
@@ -200,13 +189,13 @@ export function WallFeatureForm({
                 return (
                   <>
                     <FieldRow label="Sill height (in)">
-                      <input type="number" className="input" min={0} max={120} step={0.5}
-                        value={win.sillHeightIn}
+                      <input type="number" inputMode="decimal" className="input" min={0} max={120} step={0.5}
+                        autoComplete="off" value={win.sillHeightIn}
                         onChange={e => onUpdate(win.id, { sillHeightIn: Number(e.target.value) })} />
                     </FieldRow>
                     <FieldRow label="Opening height (in)">
-                      <input type="number" className="input" min={6} max={120} step={0.5}
-                        value={win.openingHeightIn}
+                      <input type="number" inputMode="decimal" className="input" min={6} max={120} step={0.5}
+                        autoComplete="off" value={win.openingHeightIn}
                         onChange={e => onUpdate(win.id, { openingHeightIn: Number(e.target.value) })} />
                     </FieldRow>
                   </>
@@ -214,8 +203,8 @@ export function WallFeatureForm({
               })()}
               {selectedFeature.type === 'wall-segment' && (
                 <FieldRow label="Height (in)">
-                  <input type="number" className="input" min={1} max={240} step={0.5}
-                    value={(selectedFeature as { heightIn: number }).heightIn}
+                  <input type="number" inputMode="decimal" className="input" min={1} max={240} step={0.5}
+                    autoComplete="off" value={(selectedFeature as { heightIn: number }).heightIn}
                     onChange={e => onUpdate(selectedFeature.id, { heightIn: Number(e.target.value) })} />
                 </FieldRow>
               )}
@@ -224,8 +213,8 @@ export function WallFeatureForm({
                 return (
                   <>
                     <FieldRow label="Door height (in)">
-                      <input type="number" className="input" min={60} max={120} step={0.5}
-                        value={door.doorHeightIn}
+                      <input type="number" inputMode="decimal" className="input" min={60} max={120} step={0.5}
+                        autoComplete="off" value={door.doorHeightIn}
                         onChange={e => onUpdate(door.id, { doorHeightIn: Number(e.target.value) })} />
                     </FieldRow>
                     <FieldRow label="Hinge side">

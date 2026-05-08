@@ -3,8 +3,8 @@ import { OrbitControls, Text, Billboard, Edges, Line } from '@react-three/drei';
 import { useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import type { RoomLayout, RoomFeature, WindowFeature, DoorSwingFeature, FurnitureItem } from '../types/room';
-import type { UnitSystem } from '../../../utils/coordinates';
-import { formatDim } from '../../../utils/coordinates';
+import type { UnitSystem } from '../../../utils/displayUtils';
+import { formatDim } from '../../../utils/displayUtils';
 import { effectiveW, effectiveH, safeColor } from '../utils/furnitureGeometry';
 
 interface Props {

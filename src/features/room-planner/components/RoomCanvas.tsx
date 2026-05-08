@@ -1,5 +1,5 @@
 import React from 'react';
-import { toPixels } from '../../../utils/coordinates';
+import { toPixels } from '../../../utils/canvasCoords';
 import type { RoomFeature, RoomLayout } from '../types/room';
 import type { MeasurementArrow } from '../utils/measurements';
 import { featureLenIn } from '../hooks/useWallFeatureDrag';
@@ -13,7 +13,7 @@ interface Props {
   selectedFeatureId: number | null;
   onFeatureClick: (id: number) => void;
   liveState: LiveState;
-  onFeatureMouseDown: (e: React.MouseEvent, feature: RoomFeature, mode: DragMode) => void;
+  onFeaturePointerDown: (e: React.PointerEvent, feature: RoomFeature, mode: DragMode) => void;
   snapGridIn?: number;
   measurementArrows?: MeasurementArrow[];
   children?: React.ReactNode;
@@ -34,7 +34,7 @@ function resizeHandleStyle(horizontal: boolean, end: 'start' | 'end', thickness:
 
 export default function RoomCanvas({
   layout, features, selectedFeatureId, onFeatureClick,
-  liveState, onFeatureMouseDown, snapGridIn, measurementArrows, children,
+  liveState, onFeaturePointerDown, snapGridIn, measurementArrows, children,
 }: Props) {
   const gridPx = snapGridIn ? toPixels(snapGridIn) : null;
 
@@ -70,7 +70,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Window"
               onClick={clickHandler}
-              onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'move')}
+              onPointerDown={e => onFeaturePointerDown(e, liveFeature, 'move')}
               style={{
                 position: 'absolute',
                 left: feature.wall === 'left' ? -5 : horiz ? toPixels(offsetIn) : undefined,
@@ -85,8 +85,8 @@ export default function RoomCanvas({
               }}
             >
               {selected && <>
-                <div style={resizeHandleStyle(horiz, 'start', 10)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-start')} />
-                <div style={resizeHandleStyle(horiz, 'end', 10)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-end')} />
+                <div style={resizeHandleStyle(horiz, 'start', 10)} onPointerDown={e => onFeaturePointerDown(e, liveFeature, 'resize-start')} />
+                <div style={resizeHandleStyle(horiz, 'end', 10)} onPointerDown={e => onFeaturePointerDown(e, liveFeature, 'resize-end')} />
               </>}
             </div>
           );
@@ -100,7 +100,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Wall Segment"
               onClick={clickHandler}
-              onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'move')}
+              onPointerDown={e => onFeaturePointerDown(e, liveFeature, 'move')}
               style={{
                 position: 'absolute',
                 left: feature.wall === 'left' ? -5 : horiz ? toPixels(offsetIn) : undefined,
@@ -115,8 +115,8 @@ export default function RoomCanvas({
               }}
             >
               {selected && <>
-                <div style={resizeHandleStyle(horiz, 'start', 5)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-start')} />
-                <div style={resizeHandleStyle(horiz, 'end', 5)} onMouseDown={e => onFeatureMouseDown(e, liveFeature, 'resize-end')} />
+                <div style={resizeHandleStyle(horiz, 'start', 5)} onPointerDown={e => onFeaturePointerDown(e, liveFeature, 'resize-start')} />
+                <div style={resizeHandleStyle(horiz, 'end', 5)} onPointerDown={e => onFeaturePointerDown(e, liveFeature, 'resize-end')} />
               </>}
             </div>
           );
@@ -130,7 +130,7 @@ export default function RoomCanvas({
               key={feature.id}
               title="Door"
               onClick={clickHandler}
-              onMouseDown={e => onFeatureMouseDown(e, feature, 'move')}
+              onPointerDown={e => onFeaturePointerDown(e, feature, 'move')}
               style={{
                 position: 'absolute',
                 ...posStyle,

@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { toInches } from '../../../utils/coordinates';
+import { toInches } from '../../../utils/canvasCoords';
 import type { RoomFeature, RoomLayout, WallSide } from '../types/room';
 import type { FeatureChanges } from './useWallFeatures';
 
@@ -77,21 +77,56 @@ export function computeResizeStart(
   return [off, fixedEnd - off];
 }
 
+export interface DragSnapshot {
+  featureId: number;
+  mode: DragMode;
+  wall: WallSide;
+  startOffsetIn: number;
+  startLengthIn: number;
+}
+
+export function dragReducer(
+  drag: DragSnapshot,
+  deltaIn: number,
+  layout: RoomLayout,
+  siblings: RoomFeature[],
+): NonNullable<LiveState> {
+  const wallLen = wallDimIn(drag.wall, layout);
+  if (drag.mode === 'move') {
+    return {
+      id: drag.featureId,
+      offsetIn: computeMoveOffset(drag.startOffsetIn + deltaIn, drag.startLengthIn, wallLen, siblings),
+      lengthIn: drag.startLengthIn,
+    };
+  }
+  if (drag.mode === 'resize-end') {
+    return {
+      id: drag.featureId,
+      offsetIn: drag.startOffsetIn,
+      lengthIn: computeResizeEnd(drag.startOffsetIn, drag.startLengthIn + deltaIn, wallLen, siblings),
+    };
+  }
+  const [off, len] = computeResizeStart(drag.startOffsetIn + deltaIn, drag.startOffsetIn + drag.startLengthIn, siblings);
+  return { id: drag.featureId, offsetIn: off, lengthIn: len };
+}
+
 export function useWallFeatureDrag(
   layout: RoomLayout,
   features: RoomFeature[],
   onFeatureClick: (id: number) => void,
   onFeatureUpdate: (id: number, changes: FeatureChanges) => void,
+  canvasScale = 1,
 ) {
   const [liveState, setLiveState] = useState<LiveState>(null);
   const dragRef = useRef<{
-    featureId: number; mode: DragMode;
-    startMousePx: number; startOffsetIn: number; startLengthIn: number; wall: WallSide;
+    featureId: number; mode: DragMode; pointerId: number;
+    startPointerPx: number; startOffsetIn: number; startLengthIn: number; wall: WallSide;
   } | null>(null);
 
-  function startDrag(e: React.MouseEvent, feature: RoomFeature, mode: DragMode) {
+  function startDrag(e: React.PointerEvent, feature: RoomFeature, mode: DragMode) {
     e.stopPropagation();
     e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
     onFeatureClick(feature.id);
 
     const isH = feature.wall === 'top' || feature.wall === 'bottom';
@@ -99,33 +134,26 @@ export function useWallFeatureDrag(
     let lastLive = { id: feature.id, offsetIn: feature.offsetIn, lengthIn: startLenIn };
 
     dragRef.current = {
-      featureId: feature.id, mode,
-      startMousePx: isH ? e.clientX : e.clientY,
+      featureId: feature.id, mode, pointerId: e.pointerId,
+      startPointerPx: isH ? e.clientX : e.clientY,
       startOffsetIn: feature.offsetIn, startLengthIn: startLenIn, wall: feature.wall,
     };
     document.body.style.userSelect = 'none';
 
-    function onMouseMove(me: MouseEvent) {
+    function onPointerMove(pe: PointerEvent) {
       const d = dragRef.current!;
+      if (pe.pointerId !== d.pointerId) return;
       const isHoriz = d.wall === 'top' || d.wall === 'bottom';
-      const deltaIn = toInches((isHoriz ? me.clientX : me.clientY) - d.startMousePx);
-      const wallLen = wallDimIn(d.wall, layout);
+      const deltaIn = toInches(((isHoriz ? pe.clientX : pe.clientY) - d.startPointerPx) / canvasScale);
       const siblings = features.filter(f => f.id !== d.featureId && f.wall === d.wall);
-      let next: NonNullable<LiveState>;
-      if (d.mode === 'move') {
-        next = { id: d.featureId, offsetIn: computeMoveOffset(d.startOffsetIn + deltaIn, d.startLengthIn, wallLen, siblings), lengthIn: d.startLengthIn };
-      } else if (d.mode === 'resize-end') {
-        next = { id: d.featureId, offsetIn: d.startOffsetIn, lengthIn: computeResizeEnd(d.startOffsetIn, d.startLengthIn + deltaIn, wallLen, siblings) };
-      } else {
-        const [off, len] = computeResizeStart(d.startOffsetIn + deltaIn, d.startOffsetIn + d.startLengthIn, siblings);
-        next = { id: d.featureId, offsetIn: off, lengthIn: len };
-      }
+      const next = dragReducer(d, deltaIn, layout, siblings);
       lastLive = next;
       setLiveState(next);
     }
 
-    function onMouseUp() {
+    function onPointerUp(pe: PointerEvent) {
       const d = dragRef.current!;
+      if (pe.pointerId !== d.pointerId) return;
       if (d.mode === 'move') {
         onFeatureUpdate(d.featureId, { offsetIn: lastLive.offsetIn });
       } else {
@@ -134,12 +162,12 @@ export function useWallFeatureDrag(
       dragRef.current = null;
       setLiveState(null);
       document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
     }
 
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
   }
 
   return { liveState, startDrag };

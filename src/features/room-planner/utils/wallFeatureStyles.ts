@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { toPixels } from '../../../utils/coordinates';
+import { toPixels } from '../../../utils/canvasCoords';
 import type { DoorSwingFeature } from '../types/room';
 
 export function getDoorSwingStyle(

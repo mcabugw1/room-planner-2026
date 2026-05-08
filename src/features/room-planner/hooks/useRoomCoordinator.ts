@@ -1,19 +1,31 @@
 import { useMemo, useCallback, useEffect } from 'react';
-import { formatDim } from '../../../utils/coordinates';
+import { formatDim } from '../../../utils/displayUtils';
+import { toPixels } from '../../../utils/canvasCoords';
 import { findNearestNeighbors, measureTwoObjects } from '../utils/measurements';
 import type { MeasurementArrow } from '../utils/measurements';
 import type { LayoutSnapshot } from '../services/layoutDb';
-import type { useFurniture } from './useFurniture';
-import type { useWallFeatures } from './useWallFeatures';
-import type { useRoomSession } from './useRoomSession';
-import type { useMeasurementMode } from './useMeasurementMode';
+import type { RoomLayout } from '../types/room';
+import { useFurniture } from './useFurniture';
+import { useWallFeatures } from './useWallFeatures';
+import { useRoomSession } from './useRoomSession';
+import { useMeasurementMode } from './useMeasurementMode';
+import { useLayoutPersistence } from './useLayoutPersistence';
+import { useWallFeatureDrag } from './useWallFeatureDrag';
+import { usePanelState } from './usePanelState';
+import { useNewFeatureDraft } from './useNewFeatureDraft';
+import { useDeviceType } from './useDeviceType';
+import { useVirtualKeyboard } from './useVirtualKeyboard';
+import { useCanvasViewport } from './useCanvasViewport';
 
-export function useRoomCoordinator(
-  furniture: ReturnType<typeof useFurniture>,
-  wallFeatures: ReturnType<typeof useWallFeatures>,
-  session: ReturnType<typeof useRoomSession>,
-  measurement: ReturnType<typeof useMeasurementMode>,
-) {
+export function useRoomCoordinator(initialRoom: RoomLayout) {
+  const deviceType  = useDeviceType();
+  const furniture   = useFurniture();
+  const wallFeatures = useWallFeatures(initialRoom.features);
+  const session     = useRoomSession({ ...initialRoom, features: [] });
+  const ui          = usePanelState(deviceType);
+  const featDraft   = useNewFeatureDraft();
+  const measurement = useMeasurementMode();
+
   const snapshot = useMemo<LayoutSnapshot>(() => ({
     widthIn: session.layout.widthIn,
     heightIn: session.layout.heightIn,
@@ -28,8 +40,24 @@ export function useRoomCoordinator(
     furniture.reset(s.furniture);
   }, [session, wallFeatures, furniture]);
 
-  const selectedItem = furniture.furniture.find(f => f.id === session.selectedId) ?? null;
+  const persistence = useLayoutPersistence(snapshot, restore);
+
+  const selectedItem    = furniture.furniture.find(f => f.id === session.selectedId) ?? null;
   const selectedFeature = wallFeatures.features.find(f => f.id === wallFeatures.selectedFeatureId) ?? null;
+
+  function selectFeature(id: number) {
+    wallFeatures.select(id);
+    session.setSelectedId(null);
+  }
+
+  function selectFurniture(id: number) {
+    if (measurement.showPair) {
+      measurement.fillPairId(id);
+      return;
+    }
+    session.setSelectedId(id);
+    wallFeatures.select(null);
+  }
 
   const measurementArrows = useMemo<MeasurementArrow[]>(() => {
     const arrows: MeasurementArrow[] = [];
@@ -46,20 +74,6 @@ export function useRoomCoordinator(
       label: a.isOverlap ? 'overlap' : formatDim(a.gapIn, session.unitSystem),
     }));
   }, [measurement.showNeighbors, measurement.showPair, measurement.pairIds, furniture.furniture, session.layout, session.unitSystem]);
-
-  function selectFeature(id: number) {
-    wallFeatures.select(id);
-    session.setSelectedId(null);
-  }
-
-  function selectFurniture(id: number) {
-    if (measurement.showPair) {
-      measurement.fillPairId(id);
-      return;
-    }
-    session.setSelectedId(id);
-    wallFeatures.select(null);
-  }
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -82,13 +96,35 @@ export function useRoomCoordinator(
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [session.selectedId, session, wallFeatures, furniture]);
 
+  const canvasW = toPixels(session.layout.widthIn);
+  const canvasH = toPixels(session.layout.heightIn);
+  const viewport = useCanvasViewport(canvasW, canvasH);
+
+  const drag = useWallFeatureDrag(
+    session.layout,
+    wallFeatures.features,
+    selectFeature,
+    wallFeatures.update,
+    viewport.scale,
+  );
+
+  useVirtualKeyboard();
+
   return {
-    snapshot,
-    restore,
+    session,
+    furniture,
+    wallFeatures,
+    measurement,
+    persistence,
+    ui,
+    featDraft,
+    drag,
+    viewport,
     selectedItem,
     selectedFeature,
     measurementArrows,
     selectFeature,
     selectFurniture,
+    restore,
   };
 }
