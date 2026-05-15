@@ -90,22 +90,22 @@ describe('useRoomCoordinator', () => {
   describe('restore', () => {
     it('applies snapshot dimensions to session', () => {
       const { result } = renderCoordinator();
-      act(() => result.current.restore({ widthIn: 200, heightIn: 250, ceilingHeightIn: 96, features: [], furniture: [] }));
+      act(() => result.current.restore({ widthIn: 200, heightIn: 250, ceilingHeightIn: 96, roomType: 'bedroom', features: [], furniture: [] }));
       expect(result.current.session.layout.widthIn).toBe(200);
       expect(result.current.session.layout.heightIn).toBe(250);
     });
 
     it('resets furniture items from snapshot', () => {
       const { result } = renderCoordinator();
-      const newItem = { id: 99, name: 'Test', w: 30, h: 30, x: 0, y: 0, color: '#fff', rotation: 0 as const, heightIn: 36, zOffsetIn: 0 };
-      act(() => result.current.restore({ widthIn: 120, heightIn: 120, ceilingHeightIn: 96, features: [], furniture: [newItem] }));
+      const newItem = { id: 99, name: 'Test', category: 'other' as const, w: 30, h: 30, x: 0, y: 0, color: '#fff', rotation: 0 as const, heightIn: 36, zOffsetIn: 0 };
+      act(() => result.current.restore({ widthIn: 120, heightIn: 120, ceilingHeightIn: 96, roomType: 'bedroom' as const, features: [], furniture: [newItem] }));
       expect(result.current.furniture.furniture).toHaveLength(1);
       expect(result.current.furniture.furniture[0].id).toBe(99);
     });
 
     it('resets wall features from snapshot', () => {
       const { result } = renderCoordinator();
-      act(() => result.current.restore({ widthIn: 120, heightIn: 120, ceilingHeightIn: 96, features: [], furniture: [] }));
+      act(() => result.current.restore({ widthIn: 120, heightIn: 120, ceilingHeightIn: 96, roomType: 'bedroom', features: [], furniture: [] }));
       expect(result.current.wallFeatures.features).toHaveLength(0);
     });
   });

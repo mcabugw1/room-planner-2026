@@ -1,4 +1,4 @@
-import type { FurnitureItem } from '../types/room';
+import type { FurnitureItem, FurnitureCategory } from '../types/room';
 import type { UnitSystem } from '../../../utils/displayUtils';
 
 interface FieldRowProps { label?: string; children: React.ReactNode }
@@ -54,6 +54,19 @@ export function FurnitureForm({
           value={selectedItem.name}
           onChange={e => onUpdate(selectedItem.id, { name: e.target.value })}
         />
+      </FieldRow>
+      <FieldRow label="Category">
+        <select
+          className="input"
+          value={selectedItem.category}
+          onChange={e => onUpdate(selectedItem.id, { category: e.target.value as FurnitureCategory })}
+        >
+          <option value="bed">Bed</option>
+          <option value="desk">Desk</option>
+          <option value="sofa">Sofa</option>
+          <option value="stove">Stove</option>
+          <option value="other">Other</option>
+        </select>
       </FieldRow>
       <div className="dim-pair">
         <FieldRow label="Width (in)">

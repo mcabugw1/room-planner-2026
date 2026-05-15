@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toPixels } from '../../../utils/canvasCoords';
 import type { UnitSystem } from '../../../utils/displayUtils';
-import type { RoomLayout } from '../types/room';
+import type { RoomLayout, RoomType, FengShuiConfig } from '../types/room';
 
 export const PRESETS: { label: string; w: number; h: number }[] = [
   { label: '10 × 10 ft', w: 120, h: 120 },
@@ -63,13 +63,17 @@ export function useRoomSession(initialLayout: RoomLayout) {
     if (p.w > 0) setLayout(prev => ({ ...prev, widthIn: p.w, heightIn: p.h }));
   }
 
-  function applySnapshot(widthIn: number, heightIn: number, ceilingHeightIn = 96) {
-    setLayout(prev => ({ ...prev, widthIn, heightIn, ceilingHeightIn }));
+  function applySnapshot(widthIn: number, heightIn: number, ceilingHeightIn = 96, roomType: RoomType = 'bedroom', fengShuiConfig?: FengShuiConfig) {
+    setLayout(prev => ({ ...prev, widthIn, heightIn, ceilingHeightIn, roomType, fengShuiConfig }));
     setSelectedId(null);
   }
 
   function setCeilingHeight(in_: number) {
     if (in_ >= 72 && in_ <= 240) setLayout(prev => ({ ...prev, ceilingHeightIn: in_ }));
+  }
+
+  function setRoomType(type: RoomType) {
+    setLayout(prev => ({ ...prev, roomType: type }));
   }
 
   return {
@@ -80,6 +84,6 @@ export function useRoomSession(initialLayout: RoomLayout) {
     snapGridIn, setSnapGridIn,
     snapPx,
     widthFt, widthInchPart, heightFt, heightInchPart,
-    setWidthDims, setHeightDims, setCeilingHeight, applyPreset, applySnapshot,
+    setWidthDims, setHeightDims, setCeilingHeight, setRoomType, applyPreset, applySnapshot,
   };
 }

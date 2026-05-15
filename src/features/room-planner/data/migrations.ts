@@ -1,9 +1,11 @@
-import type { RoomFeature, WindowFeature, WallSegmentFeature, DoorSwingFeature, FurnitureItem } from '../types/room';
+import type { RoomFeature, WindowFeature, WallSegmentFeature, DoorSwingFeature, FurnitureItem, FurnitureCategory, RoomType, FengShuiConfig } from '../types/room';
 
 export interface LayoutSnapshot {
   widthIn: number;
   heightIn: number;
   ceilingHeightIn: number;
+  roomType: RoomType;
+  fengShuiConfig?: FengShuiConfig;
   features: RoomFeature[];
   furniture: FurnitureItem[];
 }
@@ -21,7 +23,12 @@ function migrateFeature(f: unknown): RoomFeature {
 
 function migrateFurniture(f: unknown): FurnitureItem {
   const item = f as Record<string, unknown>;
-  return { ...(item as unknown as FurnitureItem), heightIn: (item['heightIn'] as number) ?? 36, zOffsetIn: (item['zOffsetIn'] as number) ?? 0 };
+  return {
+    ...(item as unknown as FurnitureItem),
+    heightIn: (item['heightIn'] as number) ?? 36,
+    zOffsetIn: (item['zOffsetIn'] as number) ?? 0,
+    category: (item['category'] as FurnitureCategory) ?? 'other',
+  };
 }
 
 export function migrateSnapshot(raw: unknown): LayoutSnapshot {
@@ -30,6 +37,8 @@ export function migrateSnapshot(raw: unknown): LayoutSnapshot {
     widthIn: (s['widthIn'] as number) ?? 120,
     heightIn: (s['heightIn'] as number) ?? 120,
     ceilingHeightIn: (s['ceilingHeightIn'] as number) ?? 96,
+    roomType: (s['roomType'] as RoomType) ?? 'bedroom',
+    fengShuiConfig: s['fengShuiConfig'] as FengShuiConfig | undefined,
     features: ((s['features'] as unknown[]) ?? []).map(migrateFeature),
     furniture: ((s['furniture'] as unknown[]) ?? []).map(migrateFurniture),
   };

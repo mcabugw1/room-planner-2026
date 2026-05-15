@@ -2,10 +2,10 @@ import { getBoundingBox, findNearestNeighbors, measureTwoObjects } from './measu
 import type { FurnitureItem } from '../types/room';
 import type { RoomLayout } from '../types/room';
 
-const LAYOUT: RoomLayout = { widthIn: 120, heightIn: 120, ceilingHeightIn: 96, features: [] };
+const LAYOUT: RoomLayout = { widthIn: 120, heightIn: 120, ceilingHeightIn: 96, roomType: 'bedroom', features: [] };
 
 function item(id: number, x: number, y: number, w: number, h: number): FurnitureItem {
-  return { id, name: 'test', x, y, w, h, color: '#fff', rotation: 0, heightIn: 36, zOffsetIn: 0 };
+  return { id, name: 'test', category: 'other', x, y, w, h, color: '#fff', rotation: 0, heightIn: 36, zOffsetIn: 0 };
 }
 
 describe('getBoundingBox', () => {

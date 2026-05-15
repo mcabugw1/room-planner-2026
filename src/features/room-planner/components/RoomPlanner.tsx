@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Rnd } from 'react-rnd';
 import { toPixels } from '../../../utils/canvasCoords';
 import { formatDim } from '../../../utils/displayUtils';
+import type { RoomType } from '../types/room';
 import { useRoomCoordinator } from '../hooks/useRoomCoordinator';
 import { PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
 import { useDimInput } from '../hooks/useDimInput';
@@ -218,6 +219,20 @@ export default function RoomPlanner() {
               value={session.layout.ceilingHeightIn}
               onChange={e => session.setCeilingHeight(Number(e.target.value))}
             />
+          </FieldRow>
+          <FieldRow label="Room type">
+            <select
+              className="input"
+              value={session.layout.roomType}
+              onChange={e => session.setRoomType(e.target.value as RoomType)}
+            >
+              <option value="bedroom">Bedroom</option>
+              <option value="living-room">Living Room</option>
+              <option value="office">Office</option>
+              <option value="kitchen">Kitchen</option>
+              <option value="dining-room">Dining Room</option>
+              <option value="other">Other</option>
+            </select>
           </FieldRow>
         </SectionPanel>
 

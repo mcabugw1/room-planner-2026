@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { toInches } from '../../../utils/canvasCoords';
 import { createId } from '../../../utils/createId';
 import { isOddRotation } from '../utils/furnitureGeometry';
-import type { FurnitureItem, RotationDeg } from '../types/room';
+import type { FurnitureItem, FurnitureCategory, RotationDeg } from '../types/room';
 import { defaultFurnitureHeight } from '../utils/furniture';
 import { INITIAL_FURNITURE } from '../data/furniture';
 
@@ -35,10 +35,11 @@ export function useFurniture() {
     );
   }
 
-  function add(name = 'New Block') {
+  function add(name = 'New Block', category: FurnitureCategory = 'other') {
     setFurniture(prev => [...prev, {
       id: createId(),
       name,
+      category,
       w: 24,
       h: 24,
       x: 40,

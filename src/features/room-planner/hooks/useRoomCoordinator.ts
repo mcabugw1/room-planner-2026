@@ -30,12 +30,14 @@ export function useRoomCoordinator(initialRoom: RoomLayout) {
     widthIn: session.layout.widthIn,
     heightIn: session.layout.heightIn,
     ceilingHeightIn: session.layout.ceilingHeightIn,
+    roomType: session.layout.roomType,
+    fengShuiConfig: session.layout.fengShuiConfig,
     features: wallFeatures.features,
     furniture: furniture.furniture,
-  }), [session.layout.widthIn, session.layout.heightIn, session.layout.ceilingHeightIn, wallFeatures.features, furniture.furniture]);
+  }), [session.layout.widthIn, session.layout.heightIn, session.layout.ceilingHeightIn, session.layout.roomType, session.layout.fengShuiConfig, wallFeatures.features, furniture.furniture]);
 
   const restore = useCallback((s: LayoutSnapshot) => {
-    session.applySnapshot(s.widthIn, s.heightIn, s.ceilingHeightIn);
+    session.applySnapshot(s.widthIn, s.heightIn, s.ceilingHeightIn, s.roomType, s.fengShuiConfig);
     wallFeatures.reset(s.features);
     furniture.reset(s.furniture);
   }, [session, wallFeatures, furniture]);
