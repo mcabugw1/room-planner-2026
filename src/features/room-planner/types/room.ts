@@ -7,8 +7,8 @@ export type FurnitureCategory = 'bed' | 'desk' | 'sofa' | 'stove' | 'other';
 export type RoomType = 'bedroom' | 'living-room' | 'office' | 'kitchen' | 'dining-room' | 'other';
 
 export interface FengShuiConfig {
-  entryDoorId?: number;
-  mode?: 'simple' | 'advanced';
+  entryDoorId: number | null;
+  mode: 'simple' | 'advanced';
   compassBearing?: number;
   birthYear?: number;
   // Kua number uses biological sex assignment, not gender identity

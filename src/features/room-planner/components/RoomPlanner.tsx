@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Rnd } from 'react-rnd';
 import { toPixels } from '../../../utils/canvasCoords';
 import { formatDim } from '../../../utils/displayUtils';
-import type { RoomType } from '../types/room';
+import type { RoomType, DoorSwingFeature } from '../types/room';
 import { useRoomCoordinator } from '../hooks/useRoomCoordinator';
 import { PRESETS, SNAP_SIZES } from '../hooks/useRoomSession';
 import { useDimInput } from '../hooks/useDimInput';
@@ -13,6 +13,7 @@ import LayoutsPanel from './LayoutsPanel';
 const Room3DView = React.lazy(() => import('./Room3DView'));
 import { FurnitureForm } from './FurnitureForm';
 import { WallFeatureForm } from './WallFeatureForm';
+import { FengShuiTab } from './FengShuiTab';
 
 function SectionPanel({
   title,
@@ -56,13 +57,14 @@ function FieldRow({ label, children }: { label?: string; children: React.ReactNo
 
 export default function RoomPlanner() {
   const {
-    session, furniture, wallFeatures, measurement, persistence,
+    session, furniture, wallFeatures, fengShuiConfig, measurement, persistence,
     ui, featDraft, drag, viewport,
     selectedItem, selectedFeature, measurementArrows,
     selectFeature, selectFurniture, restore,
   } = useRoomCoordinator(DEFAULT_ROOM);
 
   const isFloor = ui.viewMode === 'floor';
+  const doors = wallFeatures.features.filter((f): f is DoorSwingFeature => f.type === 'door-swing');
 
   const widthDim = useDimInput(session.widthFt, session.widthInchPart, session.setWidthDims);
   const heightDim = useDimInput(session.heightFt, session.heightInchPart, session.setHeightDims);
@@ -355,13 +357,13 @@ export default function RoomPlanner() {
         <div className={`canvas-frame${!isFloor ? ' canvas-frame--fill' : ''}`}>
           {/* View mode tabs */}
           <div className="view-mode-tabs">
-            {(['floor', '3d'] as const).map(mode => (
+            {(['floor', '3d', 'feng-shui'] as const).map(mode => (
               <button
                 key={mode}
                 className={`view-mode-tab${ui.viewMode === mode ? ' view-mode-tab--active' : ''}`}
                 onClick={() => ui.setViewMode(mode)}
               >
-                {mode === 'floor' ? 'Floor Plan' : '3D View'}
+                {mode === 'floor' ? 'Floor Plan' : mode === '3d' ? '3D View' : 'Feng Shui'}
               </button>
             ))}
           </div>
@@ -469,6 +471,18 @@ export default function RoomPlanner() {
                 unitSystem={session.unitSystem}
               />
             </Suspense>
+          )}
+
+          {ui.viewMode === 'feng-shui' && (
+            <FengShuiTab
+              config={fengShuiConfig.config}
+              doors={doors}
+              roomType={session.layout.roomType}
+              unitSystem={session.unitSystem}
+              onSetEntryDoor={fengShuiConfig.setEntryDoor}
+              onSetMode={fengShuiConfig.setMode}
+              onAnalyze={() => {}}
+            />
           )}
         </div>
       </main>

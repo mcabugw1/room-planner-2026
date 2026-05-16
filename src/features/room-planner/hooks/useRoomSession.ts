@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toPixels } from '../../../utils/canvasCoords';
 import type { UnitSystem } from '../../../utils/displayUtils';
-import type { RoomLayout, RoomType, FengShuiConfig } from '../types/room';
+import type { RoomLayout, RoomType } from '../types/room';
 
 export const PRESETS: { label: string; w: number; h: number }[] = [
   { label: '10 × 10 ft', w: 120, h: 120 },
@@ -63,8 +63,8 @@ export function useRoomSession(initialLayout: RoomLayout) {
     if (p.w > 0) setLayout(prev => ({ ...prev, widthIn: p.w, heightIn: p.h }));
   }
 
-  function applySnapshot(widthIn: number, heightIn: number, ceilingHeightIn = 96, roomType: RoomType = 'bedroom', fengShuiConfig?: FengShuiConfig) {
-    setLayout(prev => ({ ...prev, widthIn, heightIn, ceilingHeightIn, roomType, fengShuiConfig }));
+  function applySnapshot(widthIn: number, heightIn: number, ceilingHeightIn = 96, roomType: RoomType = 'bedroom') {
+    setLayout(prev => ({ ...prev, widthIn, heightIn, ceilingHeightIn, roomType, fengShuiConfig: undefined }));
     setSelectedId(null);
   }
 

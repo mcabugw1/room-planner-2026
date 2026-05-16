@@ -11,7 +11,7 @@ export function usePanelState(deviceType: DeviceType = 'desktop') {
   const [measureOpen,       setMeasureOpen]        = useState(false);
   const [legendOpen,        setLegendOpen]         = useState(!isPhone);
   const [mobileSidebarOpen, setMobileSidebarOpen]  = useState(false);
-  const [viewMode,          setViewMode]           = useState<'floor' | '3d'>('floor');
+  const [viewMode,          setViewMode]           = useState<'floor' | '3d' | 'feng-shui'>('floor');
 
   return {
     layoutsOpen,  toggleLayouts:  () => setLayoutsOpen(o => !o),

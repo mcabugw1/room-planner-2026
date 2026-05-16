@@ -8,6 +8,7 @@ import type { RoomLayout } from '../types/room';
 import { useFurniture } from './useFurniture';
 import { useWallFeatures } from './useWallFeatures';
 import { useRoomSession } from './useRoomSession';
+import { useFengShuiConfig } from './useFengShuiConfig';
 import { useMeasurementMode } from './useMeasurementMode';
 import { useLayoutPersistence } from './useLayoutPersistence';
 import { useWallFeatureDrag } from './useWallFeatureDrag';
@@ -22,6 +23,7 @@ export function useRoomCoordinator(initialRoom: RoomLayout) {
   const furniture   = useFurniture();
   const wallFeatures = useWallFeatures(initialRoom.features);
   const session     = useRoomSession({ ...initialRoom, features: [] });
+  const fengShuiConfig = useFengShuiConfig(initialRoom.fengShuiConfig);
   const ui          = usePanelState(deviceType);
   const featDraft   = useNewFeatureDraft();
   const measurement = useMeasurementMode();
@@ -31,16 +33,17 @@ export function useRoomCoordinator(initialRoom: RoomLayout) {
     heightIn: session.layout.heightIn,
     ceilingHeightIn: session.layout.ceilingHeightIn,
     roomType: session.layout.roomType,
-    fengShuiConfig: session.layout.fengShuiConfig,
+    fengShuiConfig: fengShuiConfig.config,
     features: wallFeatures.features,
     furniture: furniture.furniture,
-  }), [session.layout.widthIn, session.layout.heightIn, session.layout.ceilingHeightIn, session.layout.roomType, session.layout.fengShuiConfig, wallFeatures.features, furniture.furniture]);
+  }), [session.layout.widthIn, session.layout.heightIn, session.layout.ceilingHeightIn, session.layout.roomType, fengShuiConfig.config, wallFeatures.features, furniture.furniture]);
 
   const restore = useCallback((s: LayoutSnapshot) => {
-    session.applySnapshot(s.widthIn, s.heightIn, s.ceilingHeightIn, s.roomType, s.fengShuiConfig);
+    session.applySnapshot(s.widthIn, s.heightIn, s.ceilingHeightIn, s.roomType);
+    fengShuiConfig.reset(s.fengShuiConfig);
     wallFeatures.reset(s.features);
     furniture.reset(s.furniture);
-  }, [session, wallFeatures, furniture]);
+  }, [session, fengShuiConfig, wallFeatures, furniture]);
 
   const persistence = useLayoutPersistence(snapshot, restore);
 
@@ -116,6 +119,7 @@ export function useRoomCoordinator(initialRoom: RoomLayout) {
     session,
     furniture,
     wallFeatures,
+    fengShuiConfig,
     measurement,
     persistence,
     ui,

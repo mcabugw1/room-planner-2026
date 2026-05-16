@@ -23,9 +23,18 @@ Goal 01 complete (`roomType`, `category`, `FengShuiConfig` in types).
 | `src/features/room-planner/hooks/useRoomCoordinator.ts` | Thread `fengShuiConfig` + setter through coordinator |
 
 ## Acceptance criteria
-- [ ] "Feng Shui" tab visible and clickable
-- [ ] Simple/Advanced toggle works (state persists in `FengShuiConfig`)
-- [ ] Entry door dropdown shows all `DoorSwingFeature` items by wall + offset; auto-selects if only one
-- [ ] If no doors added: shows "Add a door in the Walls section first"
-- [ ] "Analyze" button present (disabled state OK, no action yet)
-- [ ] Switching layouts loads the correct `FengShuiConfig` for that layout
+- [x] "Feng Shui" tab visible and clickable
+- [x] Simple/Advanced toggle works (state persists in `FengShuiConfig`)
+- [x] Entry door dropdown shows all `DoorSwingFeature` items by wall + offset; auto-selects if only one
+- [x] If no doors added: shows "Add a door in the Walls section first"
+- [x] "Analyze" button present (disabled state OK, no action yet)
+- [x] Switching layouts loads the correct `FengShuiConfig` for that layout
+
+## Implementation notes (2026-05-16)
+- `useFengShuiConfig` hook mirrors `useWallFeatures` — owns its own state, composed into coordinator
+- `FengShuiConfig.entryDoorId: number | null` (required, not optional `?: number`)
+- `FengShuiConfig.mode: 'simple' | 'advanced'` (required), default `'simple'`
+- Auto-select runs in `FengShuiTab` `useEffect([], [])` — init only, never overrides
+- Door label: `"Right wall, 4' 2""` via `formatDim(offsetIn, unitSystem)`
+- Analyze button disabled: `title="Select an entry door first"`
+- CSS added to `globals.css` under `/* ── Feng Shui tab ── */`
