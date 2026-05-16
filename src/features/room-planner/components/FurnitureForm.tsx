@@ -137,6 +137,26 @@ export function FurnitureForm({
           <span className="rotation-hint">(R)</span>
         </div>
       </FieldRow>
+      {selectedItem.category !== 'other' && (
+        <FieldRow label={selectedItem.category === 'bed' ? 'Head / Foot' : 'Back / Front'}>
+          <div className="btn-toggle-group" role="group" aria-label="Orientation">
+            <button
+              className={`btn-toggle${(selectedItem.headAtStart ?? false) ? ' btn-toggle--active' : ''}`}
+              aria-pressed={selectedItem.headAtStart ?? false}
+              onClick={() => onUpdate(selectedItem.id, { headAtStart: true })}
+            >
+              {selectedItem.category === 'bed' ? 'Head at top' : 'Back at top'}
+            </button>
+            <button
+              className={`btn-toggle${!(selectedItem.headAtStart ?? false) ? ' btn-toggle--active' : ''}`}
+              aria-pressed={!(selectedItem.headAtStart ?? false)}
+              onClick={() => onUpdate(selectedItem.id, { headAtStart: false })}
+            >
+              {selectedItem.category === 'bed' ? 'Head at bottom' : 'Back at bottom'}
+            </button>
+          </div>
+        </FieldRow>
+      )}
       <button
         className="btn-destructive"
         onClick={() => onRemove(selectedItem.id)}

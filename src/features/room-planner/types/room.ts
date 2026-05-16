@@ -29,6 +29,8 @@ export interface FurnitureItem {
   rotation: RotationDeg;
   heightIn: number;
   zOffsetIn: number;
+  /** Head (bed) or back (desk/sofa/stove) is at the leading edge when rotation=0 (top). Undefined = same as false. */
+  headAtStart?: boolean;
 }
 
 export interface WindowFeature {

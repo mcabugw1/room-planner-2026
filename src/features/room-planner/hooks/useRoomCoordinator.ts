@@ -9,6 +9,7 @@ import { useFurniture } from './useFurniture';
 import { useWallFeatures } from './useWallFeatures';
 import { useRoomSession } from './useRoomSession';
 import { useFengShuiConfig } from './useFengShuiConfig';
+import { useFengShuiEngine } from './useFengShuiEngine';
 import { useMeasurementMode } from './useMeasurementMode';
 import { useLayoutPersistence } from './useLayoutPersistence';
 import { useWallFeatureDrag } from './useWallFeatureDrag';
@@ -24,6 +25,7 @@ export function useRoomCoordinator(initialRoom: RoomLayout) {
   const wallFeatures = useWallFeatures(initialRoom.features);
   const session     = useRoomSession({ ...initialRoom, features: [] });
   const fengShuiConfig = useFengShuiConfig(initialRoom.fengShuiConfig);
+  const fengShuiEngine = useFengShuiEngine();
   const ui          = usePanelState(deviceType);
   const featDraft   = useNewFeatureDraft();
   const measurement = useMeasurementMode();
@@ -120,6 +122,7 @@ export function useRoomCoordinator(initialRoom: RoomLayout) {
     furniture,
     wallFeatures,
     fengShuiConfig,
+    fengShuiEngine,
     measurement,
     persistence,
     ui,

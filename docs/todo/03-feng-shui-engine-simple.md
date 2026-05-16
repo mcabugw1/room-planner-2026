@@ -39,9 +39,32 @@ Goals 01–02 complete.
 - Door swing arc = circular sector from hinge point; check AABB intersection with each furniture piece
 
 ## Acceptance criteria
-- [ ] Clicking "Analyze" runs in <100ms for rooms with ≤20 furniture pieces
-- [ ] Each of the 7 rules fires correctly for a manually constructed test case
-- [ ] Issues sorted: errors first, warnings second, info last
-- [ ] Pieces with `category: 'other'` skip command/coffin/backing checks
-- [ ] "No issues found" state shown when all rules pass
-- [ ] Unit tests for each rule evaluator in `feng-shui/rules/*.test.ts`
+- [x] Clicking "Analyze" runs in <100ms for rooms with ≤20 furniture pieces
+- [x] Each of the 7 rules fires correctly for a manually constructed test case
+- [x] Issues sorted: errors first, warnings second, info last
+- [x] Pieces with `category: 'other'` skip command/coffin/backing checks
+- [x] "No issues found" state shown when all rules pass
+- [x] Unit tests for each rule evaluator in `feng-shui/rules/*.test.ts`
+
+## Implementation notes (2026-05-16)
+
+### Key files created
+- `feng-shui/geometry.ts` — shared geometry helpers (not in spec, added for DRY)
+- `feng-shui/types.ts`, `feng-shui/engine.ts`, `feng-shui/rules/*.ts` — all 7 rules
+- `hooks/useFengShuiEngine.ts` — isolated hook for engine state (`issues`, `run`, `reset`)
+- `components/IssueList.tsx` — severity badge list with click-to-select
+
+### Schema change (from spec)
+Added `headAtStart?: boolean` to `FurnitureItem` (not just `bed` — also `desk`, `sofa`, `stove`). Migration in `data/migrations.ts`. Toggle in `FurnitureForm.tsx` with per-category labels ("Head/Foot" for bed, "Back/Front" for others).
+
+### Rule decisions from grill session
+- Door target = wall point + 6" inward (threshold, not wall surface)
+- Rule 3 band = AABB intersection with band width `swingIn`
+- Rule 4 backing: uses `headAtStart` for all 4 categories; skips if `headAtStart` is undefined
+- Rule 6 door swing: exact sector-vs-AABB (corners + closest-edge-point checks)
+- Rule 7 chi path: door→nothing=`warning`, door→window=`error`; ray width=`swingIn`
+- Severities: blocked sightline=`error`, in-direct-line=`warning`, coffin=`error`
+
+### State
+`useFengShuiEngine` holds `issues: FengShuiIssue[] | null` (null = not yet analyzed).
+Composed in `useRoomCoordinator`, exposed as `fengShuiEngine`. Clicking an issue calls `selectFurniture(affectedItemId)` in `IssueList`.

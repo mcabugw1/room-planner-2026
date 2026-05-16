@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { formatDim } from '../../../utils/displayUtils';
 import type { UnitSystem } from '../../../utils/displayUtils';
 import type { DoorSwingFeature, FengShuiConfig, RoomType } from '../types/room';
+import type { FengShuiIssue } from '../feng-shui/types';
+import { IssueList } from './IssueList';
 
 const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   'bedroom': 'Bedroom',
@@ -17,8 +19,10 @@ interface FengShuiTabProps {
   doors: DoorSwingFeature[];
   roomType: RoomType;
   unitSystem: UnitSystem;
+  issues: FengShuiIssue[] | null;
   onSetEntryDoor: (id: number | null) => void;
   onSetMode: (mode: 'simple' | 'advanced') => void;
+  onSelectItem: (id: number) => void;
   onAnalyze: () => void;
 }
 
@@ -27,8 +31,10 @@ export function FengShuiTab({
   doors,
   roomType,
   unitSystem,
+  issues,
   onSetEntryDoor,
   onSetMode,
+  onSelectItem,
   onAnalyze,
 }: FengShuiTabProps) {
   useEffect(() => {
@@ -93,8 +99,14 @@ export function FengShuiTab({
         </p>
       </div>
 
-      <div className="feng-shui-results-empty" role="status" aria-live="polite">
-        <span>Run analysis to see results</span>
+      <div aria-live="polite">
+        {issues === null ? (
+          <div className="feng-shui-results-empty" role="status">
+            <span>Run analysis to see results</span>
+          </div>
+        ) : (
+          <IssueList issues={issues} onSelectItem={onSelectItem} />
+        )}
       </div>
 
       <button

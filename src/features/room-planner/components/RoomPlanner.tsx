@@ -57,7 +57,7 @@ function FieldRow({ label, children }: { label?: string; children: React.ReactNo
 
 export default function RoomPlanner() {
   const {
-    session, furniture, wallFeatures, fengShuiConfig, measurement, persistence,
+    session, furniture, wallFeatures, fengShuiConfig, fengShuiEngine, measurement, persistence,
     ui, featDraft, drag, viewport,
     selectedItem, selectedFeature, measurementArrows,
     selectFeature, selectFurniture, restore,
@@ -479,9 +479,16 @@ export default function RoomPlanner() {
               doors={doors}
               roomType={session.layout.roomType}
               unitSystem={session.unitSystem}
+              issues={fengShuiEngine.issues}
               onSetEntryDoor={fengShuiConfig.setEntryDoor}
               onSetMode={fengShuiConfig.setMode}
-              onAnalyze={() => {}}
+              onSelectItem={selectFurniture}
+              onAnalyze={() => fengShuiEngine.run(
+                furniture.furniture,
+                wallFeatures.features,
+                session.layout,
+                fengShuiConfig.config,
+              )}
             />
           )}
         </div>

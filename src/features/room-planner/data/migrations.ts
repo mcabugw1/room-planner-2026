@@ -28,6 +28,7 @@ function migrateFurniture(f: unknown): FurnitureItem {
     heightIn: (item['heightIn'] as number) ?? 36,
     zOffsetIn: (item['zOffsetIn'] as number) ?? 0,
     category: (item['category'] as FurnitureCategory) ?? 'other',
+    headAtStart: (item['headAtStart'] as boolean | undefined) ?? undefined,
   };
 }
 
